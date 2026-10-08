@@ -1,0 +1,13 @@
+{
+  "name": "rbsistemas",
+  "description": "Los mods de Claude Code de RBSistemas: paneles y utillaje que se instalan desde aquí.",
+  "owner": {
+    "name": "RBSistemas"
+  },
+  "plugins": [
+    {
+      "name": "mi-mesa",
+      "source": "./plugins/mi-mesa"
+    }
+  ]
+}

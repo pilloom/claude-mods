@@ -1,0 +1,7 @@
+# Los escribe el motor cada vez que carga un mod desde una carpeta: son la API
+# de ESTA build de Claude Code, no fuente. Unas 14.000 líneas que cambian con
+# cada versión del binario, y cada máquina tiene las suyas.
+plugins/*/.claude-plugin/types/
+
+.DS_Store
+node_modules/

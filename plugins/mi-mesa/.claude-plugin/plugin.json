@@ -1,0 +1,10 @@
+{
+  "name": "mi-mesa",
+  "version": "1.0.0",
+  "description": "Panel con tu mesa de trabajo (docs/MI-MESA.md) agrupada por hilo, y debajo los últimos mensajes que le pasaste a Claude Code",
+  "types": "./types/index.d.ts",
+  "author": {
+    "name": "RBSistemas"
+  },
+  "homepage": "https://github.com/pilloom/claude-mods/tree/main/plugins/mi-mesa"
+}
