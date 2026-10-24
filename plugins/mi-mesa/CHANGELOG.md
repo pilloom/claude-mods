@@ -14,8 +14,11 @@
   rótulo dice cuántas quedan (` NOTAS · +2 `).
 - Se relee con el mismo trato que la mesa: cada 15 s y solo si cambió el
   `mtime`. Un post-it ilegible no tira el panel.
-- Rótulo con `inverse` sobre amarillo, que es lo que lo lee como nota pegada.
-  Se queda las filas que necesite y el resto se reparte 3/4 y 1/4 como antes.
+- Rótulo **negro sobre amarillo**, con los dos colores dichos: con `inverse`
+  sobre amarillo el texto sale del color del fondo del tema —blanco en un tema
+  claro— y blanco sobre amarillo no se lee. Las notas, en el color normal del
+  texto: en amarillo sobre el fondo del panel salían apagadas.
+- Se queda las filas que necesite y el resto se reparte 3/4 y 1/4 como antes.
 
 ### El sonido al acabar el turno
 

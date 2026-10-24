@@ -219,18 +219,22 @@ export const register: Register = (on, options) => {
 
     return (
       <Box flexDirection="column">
-        {/* El post-it, y solo cuando hay algo escrito. El rótulo va `inverse`
-            sobre amarillo, que es lo que lo lee como una nota pegada encima del
-            panel y no como otra sección más de las que ya lleva. */}
+        {/* El post-it, y solo cuando hay algo escrito.
+            El rótulo es negro sobre amarillo, los dos colores dichos, y no
+            `inverse` sobre amarillo: `inverse` pinta el texto del color del
+            FONDO del tema, que en un tema claro es blanco, y blanco sobre
+            amarillo no se lee. Negro sobre amarillo es el contraste del
+            post-it de verdad, y el mismo en tema claro y en oscuro.
+            Las notas van en el color normal del texto: en amarillo sobre el
+            fondo del panel salían apagadas, y el amarillo ya lo pone el
+            rótulo. Lo que tiene que leerse es la nota. */}
         {altoNotas > 0 ? (
           <Box flexDirection="column" height={altoNotas} overflow="hidden" flexShrink={0}>
-            <Text bold inverse color="yellow">
+            <Text bold color="black" backgroundColor="yellow">
               {` NOTAS${restan > 0 ? ` · +${restan}` : ''} `.padEnd(width)}
             </Text>
             {pintadas.map((l, i) => (
-              <Text key={`nota-${i}`} color="yellow">
-                {cut(l, width)}
-              </Text>
+              <Text key={`nota-${i}`}>{cut(l, width)}</Text>
             ))}
           </Box>
         ) : null}

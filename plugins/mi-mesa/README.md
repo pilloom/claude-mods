@@ -114,9 +114,15 @@ y la línea se pasaba de ancho y envolvía.
 
 ## Colores
 
-El rótulo del post-it va con `inverse` sobre `amarillo`, que es lo que lo lee
-como una nota pegada encima y no como otra sección más; el título de la mesa,
-con `inverse` sobre `cyan`; la línea y el rótulo de abajo van en **negro**, que es lo que contrasta en un tema claro. **En un tema oscuro
+El rótulo del post-it va **negro sobre amarillo**, con los dos colores dichos y
+no con `inverse`: `inverse` pinta el texto del color del **fondo** del tema, que
+en un tema claro es blanco, y blanco sobre amarillo no se lee. Negro sobre
+amarillo es el contraste del post-it de verdad, y el mismo en los dos temas. Las
+notas van en el color normal del texto: en amarillo sobre el fondo del panel
+salían apagadas, y el amarillo ya lo pone el rótulo.
+
+El título de la mesa va con `inverse` sobre `cyan`; la línea y el rótulo de
+abajo van en **negro**, que es lo que contrasta en un tema claro. **En un tema oscuro
 las dos se verían apagadas**: están en un solo sitio cada una, al final de
 `hooks/register.tsx`, y se cambian por el color del tema que prefieras.
 
