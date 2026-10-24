@@ -16,8 +16,9 @@
   `mtime`. Un post-it ilegible no tira el panel.
 - Rótulo **negro sobre amarillo**, con los dos colores dichos: con `inverse`
   sobre amarillo el texto sale del color del fondo del tema —blanco en un tema
-  claro— y blanco sobre amarillo no se lee. Las notas, en el color normal del
-  texto: en amarillo sobre el fondo del panel salían apagadas.
+  claro— y blanco sobre amarillo no se lee. Las notas, en negritas y en
+  `warning`, el ámbar del tema de quien lo usa: `yellow` a secas salía deslavado
+  sobre el gris del fondo, y un hex clavado se apagaría en uno de los dos temas.
 - Se queda las filas que necesite y el resto se reparte 3/4 y 1/4 como antes.
 
 ### El sonido al acabar el turno

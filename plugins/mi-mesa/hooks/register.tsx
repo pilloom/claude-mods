@@ -225,16 +225,20 @@ export const register: Register = (on, options) => {
             FONDO del tema, que en un tema claro es blanco, y blanco sobre
             amarillo no se lee. Negro sobre amarillo es el contraste del
             post-it de verdad, y el mismo en tema claro y en oscuro.
-            Las notas van en el color normal del texto: en amarillo sobre el
-            fondo del panel salían apagadas, y el amarillo ya lo pone el
-            rótulo. Lo que tiene que leerse es la nota. */}
+            Las notas van en `warning`, que es el ámbar del tema de quien lo
+            usa y no un hex clavado aquí: resuelve a un amarillo que contrasta
+            con el fondo del panel en tema claro y en oscuro, y un hex fijo se
+            apagaría en uno de los dos. `yellow` a secas salía deslavado sobre
+            el gris; en negritas, además, pesa lo que pesa una nota a mano. */}
         {altoNotas > 0 ? (
           <Box flexDirection="column" height={altoNotas} overflow="hidden" flexShrink={0}>
             <Text bold color="black" backgroundColor="yellow">
               {` NOTAS${restan > 0 ? ` · +${restan}` : ''} `.padEnd(width)}
             </Text>
             {pintadas.map((l, i) => (
-              <Text key={`nota-${i}`}>{cut(l, width)}</Text>
+              <Text key={`nota-${i}`} bold color="warning">
+                {cut(l, width)}
+              </Text>
             ))}
           </Box>
         ) : null}

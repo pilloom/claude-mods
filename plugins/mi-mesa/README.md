@@ -117,9 +117,12 @@ y la línea se pasaba de ancho y envolvía.
 El rótulo del post-it va **negro sobre amarillo**, con los dos colores dichos y
 no con `inverse`: `inverse` pinta el texto del color del **fondo** del tema, que
 en un tema claro es blanco, y blanco sobre amarillo no se lee. Negro sobre
-amarillo es el contraste del post-it de verdad, y el mismo en los dos temas. Las
-notas van en el color normal del texto: en amarillo sobre el fondo del panel
-salían apagadas, y el amarillo ya lo pone el rótulo.
+amarillo es el contraste del post-it de verdad, y el mismo en los dos temas.
+
+Las notas van en negritas y en **`warning`**, que es el ámbar del tema de quien
+lo usa y no un hex clavado en el código: así contrasta con el gris del fondo del
+panel en tema claro y en oscuro, mientras un hex fijo se apagaría en uno de los
+dos. `yellow` a secas salía deslavado sobre ese gris.
 
 El título de la mesa va con `inverse` sobre `cyan`; la línea y el rótulo de
 abajo van en **negro**, que es lo que contrasta en un tema claro. **En un tema oscuro
