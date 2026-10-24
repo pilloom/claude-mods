@@ -24,8 +24,20 @@ export type Prompt = {
   at: number
 }
 
+/**
+ * El post-it: lo que hay escrito en NOTAS.md, ya limpio de adornos.
+ *
+ * Sin notas la lista va vacía y `mtimeMs` a 0, que es también lo que vale
+ * cuando el fichero no existe: el panel omite la sección entera en los dos
+ * casos y no deja un hueco con el rótulo solo.
+ */
+export type Notas = {
+  lines: string[]
+  mtimeMs: number
+}
+
 declare module 'claude-code' {
   interface PluginState {
-    'mi-mesa': { mesa: Mesa; prompts: Prompt[] }
+    'mi-mesa': { mesa: Mesa; prompts: Prompt[]; notas: Notas }
   }
 }

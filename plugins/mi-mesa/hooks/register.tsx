@@ -1,18 +1,30 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
-import type { Mesa, Prompt } from '../types'
-import { parseHistory, parseMesa } from './parse'
+import type { Mesa, Notas, Prompt } from '../types'
+import { parseHistory, parseMesa, parseNotas } from './parse'
 
 const PANE = 'mi-mesa'
 const MESA_FILE = 'docs/MI-MESA.md'
+/**
+ * El post-it, en la raíz y no en `docs/`: es un fichero que el repositorio
+ * versiona a propósito, para que la nota viaje con la rama, mientras la mesa
+ * se genera y no se sube.
+ */
+const NOTAS_FILE = 'NOTAS.md'
+/** Cuántas líneas del post-it caben antes de que se diga cuántas quedan. */
+const NOTAS_MAX = 5
+/** El clip que suena al acabar el turno; es un fichero del propio mod. */
+const SONIDO = 'sounds/listo.wav'
 /** Cuántos de tus mensajes guarda y pinta el cuarto de abajo. */
 const ULTIMOS = 10
 /** Cola del historial que se lee: de sobra para sacar 10 de este repo entre los cuatro. */
 const COLA = 1200
 const EMPTY: Mesa = { repo: '', generated: '?', hilos: [], mtimeMs: 0 }
+const SIN_NOTAS: Notas = { lines: [], mtimeMs: 0 }
 const mesa = atom({ plugin: 'mi-mesa', key: 'mesa' } as const, EMPTY)
 const prompts = atom({ plugin: 'mi-mesa', key: 'prompts' } as const, [] as Prompt[])
+const notas = atom({ plugin: 'mi-mesa', key: 'notas' } as const, SIN_NOTAS)
 
 // La mesa es la del repo en el que corre la sesión: backend, front o el que
 // tenga su docs/MI-MESA.md. El título del panel lleva el nombre de esa carpeta.
@@ -36,6 +48,33 @@ async function refresh($: EngineInterface): Promise<void> {
     await update($, mesa, () => ({ ...parseMesa(text, mtimeMs), repo }))
   } catch (err) {
     await update($, mesa, m => ({ ...m, repo, error: String(err) }))
+  }
+}
+
+/**
+ * Relee NOTAS.md con el mismo trato que la mesa: solo si cambió el `mtime`.
+ *
+ * Que no haya fichero no es un error y no se pinta como tal, al contrario que
+ * con la mesa: el post-it es opcional y su ausencia es el caso normal, así que
+ * se vuelve al estado vacío y la sección desaparece. `mtimeMs: 0` es ese
+ * estado, el de no tener fichero y el de tenerlo sin ninguna línea útil.
+ */
+async function refreshNotas($: EngineInterface): Promise<void> {
+  const { root } = await repoOf($)
+  const file = `${root}/${NOTAS_FILE}`
+  try {
+    if (!(await $.fs.exists(file))) {
+      const prev = await read($, notas)
+      if (prev.mtimeMs !== 0 || prev.lines.length > 0) await update($, notas, () => SIN_NOTAS)
+      return
+    }
+    const { mtimeMs } = await $.fs.stat(file)
+    const prev = await read($, notas)
+    if (mtimeMs === prev.mtimeMs) return
+    const text = await $.fs.read(file)
+    await update($, notas, () => parseNotas(text, mtimeMs))
+  } catch {
+    // Un post-it ilegible no tira el panel: se queda con lo que ya tenía.
   }
 }
 
@@ -80,16 +119,22 @@ function hora(at: number): string {
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
 }
 
-export const register: Register = on => {
+export const register: Register = (on, options) => {
+  // El sonido se puede apagar desde /config: es la clase de añadido que una
+  // máquina compartida o una videollamada quieren callar sin desinstalar nada.
+  const suena = options.sonido !== false
+
   on('session.start', async ($, e, next) => {
     await $.command.register({
       name: 'mi-mesa',
       description: 'Abre el panel con los tickets de docs/MI-MESA.md del repo',
     })
     await refresh($)
+    await refreshNotas($)
     await refreshPrompts($)
     $.clock.every(15_000, async () => {
       await refresh($)
+      await refreshNotas($)
       await refreshPrompts($)
     })
     void openPane($)
@@ -98,6 +143,7 @@ export const register: Register = on => {
 
   on('command.run', { command: 'mi-mesa' }, async $ => {
     await refresh($)
+    await refreshNotas($)
     await refreshPrompts($)
     await openPane($)
     return { text: 'Panel de la mesa abierto.' }
@@ -119,10 +165,31 @@ export const register: Register = on => {
     return next(e)
   })
 
+  /**
+   * Un sonido cuando Claude acaba de contestar.
+   *
+   * Solo con `reason: 'answer'` y solo en el bucle principal: un turno que
+   * levanta cinco subagentes termina seis veces, y sin el filtro de `agentId`
+   * sonaría seis. Una interrupción, un error de la API o un rechazo callan,
+   * que es lo que se pidió: el aviso es de «ya está», no de «pasó algo».
+   *
+   * `play` solo suena en macOS, donde el motor tiene `afplay`; en Linux o
+   * Windows no suena nada y no falla. Se lanza sin `await` y con el fallo
+   * tragado para no retrasar ni romper la respuesta por un clip.
+   */
+  on('turn.complete', async ($, e, next) => {
+    const res = await next(e)
+    if (suena && e.reason === 'answer' && e.agentId === undefined && !e.isAborted) {
+      void $.audio.play({ asset: SONIDO }).catch(() => {})
+    }
+    return res
+  })
+
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
     const { Box, Text } = $.ui.resolve(e)
     const m = await read($, mesa)
     const ultimos = await read($, prompts)
+    const post = await read($, notas)
     const total = m.hilos.reduce((n, hilo) => n + hilo.tickets.length, 0)
     // El ancho es el del cuerpo del Pane, que es lo que una barra o una regla
     // de ancho completo tiene que medir: el del viewport es el de la pantalla,
@@ -135,14 +202,38 @@ export const register: Register = on => {
     // —un test que monta sin props, una superficie que no lo manda— no se parte
     // nada: las dos secciones van seguidas y el tercio de abajo no desaparece.
     const rows = e.props?.scroll?.bodyRows ?? 0
-    const parte = rows >= 12
-    const abajo = parte ? Math.max(4, rows - Math.ceil((rows * 3) / 4)) : 0
-    const arriba = parte ? rows - abajo : undefined
+    // El post-it se queda las filas que necesite —una por nota, más la del
+    // rótulo— y el resto se reparte como antes. Lo que no cabe no se recorta a
+    // la mitad: se dice cuántas notas quedan sin pintar, y el fichero se abre
+    // para verlas. Sin notas no ocupa nada y el panel sale como siempre.
+    const pintadas = post.lines.slice(0, NOTAS_MAX)
+    const restan = post.lines.length - pintadas.length
+    const altoNotas = pintadas.length > 0 ? pintadas.length + 1 : 0
+    // Lo que queda para la mesa y los mensajes, ya sin el post-it.
+    const libres = Math.max(0, rows - altoNotas)
+    const parte = rows >= 12 && libres >= 10
+    const abajo = parte ? Math.max(4, libres - Math.ceil((libres * 3) / 4)) : 0
+    const arriba = parte ? libres - abajo : undefined
     // La línea y el rótulo se quedan dos de las filas del cuarto de abajo.
     const caben = parte ? Math.max(1, abajo - 2) : ULTIMOS
 
     return (
       <Box flexDirection="column">
+        {/* El post-it, y solo cuando hay algo escrito. El rótulo va `inverse`
+            sobre amarillo, que es lo que lo lee como una nota pegada encima del
+            panel y no como otra sección más de las que ya lleva. */}
+        {altoNotas > 0 ? (
+          <Box flexDirection="column" height={altoNotas} overflow="hidden" flexShrink={0}>
+            <Text bold inverse color="yellow">
+              {` NOTAS${restan > 0 ? ` · +${restan}` : ''} `.padEnd(width)}
+            </Text>
+            {pintadas.map((l, i) => (
+              <Text key={`nota-${i}`} color="yellow">
+                {cut(l, width)}
+              </Text>
+            ))}
+          </Box>
+        ) : null}
         <Box flexDirection="column" height={arriba} overflow="hidden" flexShrink={0}>
           {/* Barra de ancho completo: `inverse` pinta el fondo del color y el
               texto del fondo, así que el rótulo se lee como un título y no

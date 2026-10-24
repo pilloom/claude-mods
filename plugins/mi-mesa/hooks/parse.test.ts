@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 
-import { parseHistory, parseMesa } from './parse'
+import { parseHistory, parseMesa, parseNotas } from './parse'
 
 const SAMPLE = `# Mi mesa de trabajo
 
@@ -136,4 +136,17 @@ test('el tope corta por el final, que es lo reciente', () => {
 // filtrar por prefijo mezclaría los mensajes de dos de los cuatro repos hermanos.
 test('un repo cuyo nombre empieza igual no cuela sus mensajes', () => {
   expect(parseHistory(HISTORY, DRIVER, 5)).toEqual([{ text: 'de otro repo', at: 2 }])
+})
+
+test('el post-it deja las líneas que hay, sin cabeceras ni rayas', () => {
+  const { lines, mtimeMs } = parseNotas(
+    ['# Notas', '', '## Para el lunes', '- llamar al banco', '* y al gestor', '1. firmar', '', '---', '> ojo con esto', 'suelta'].join('\n'),
+    7,
+  )
+  expect(lines).toEqual(['• llamar al banco', '• y al gestor', '• firmar', 'suelta'])
+  expect(mtimeMs).toEqual(7)
+})
+
+test('un fichero de solo adornos cuenta como no tener notas', () => {
+  expect(parseNotas('# Notas\n\n===\n\n', 7).lines).toEqual([])
 })

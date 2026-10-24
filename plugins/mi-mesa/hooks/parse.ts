@@ -1,4 +1,4 @@
-import type { Hilo, Mesa, Prompt, Ticket } from '../types'
+import type { Hilo, Mesa, Notas, Prompt, Ticket } from '../types'
 
 /**
  * Una línea de ticket: marca, clave, prioridad y el resto.
@@ -102,4 +102,32 @@ export function parseHistory(text: string, project: string, limit: number): Prom
     out.push({ text: display.replace(/\s+/gu, ' '), at: typeof row.timestamp === 'number' ? row.timestamp : 0 })
   }
   return out
+}
+
+/** Cabeceras y adornos que el post-it no pinta: el rótulo ya lo pone el panel. */
+const ADORNO = /^(#{1,6}\s|[-=*_]{3,}\s*$|>\s?)/u
+
+/** La viñeta de una lista de Markdown, que se cambia por una sola. */
+const VINETA = /^\s*(?:[-*+]|\d+[.)])\s+/u
+
+/**
+ * Lee NOTAS.md como un post-it: las líneas que hay, en su orden y sin adornos.
+ *
+ * Es un fichero que escribes a mano y que el repositorio versiona, así que no
+ * tiene formato pactado como la mesa: aquí no se busca ninguna estructura, solo
+ * se quitan las cabeceras, las rayas y las citas —el rótulo del panel ya dice
+ * que son notas—, se unifican las viñetas en una sola y se tiran las líneas en
+ * blanco, que en tres filas de panel no se pagan.
+ *
+ * Un fichero que existe pero no deja ninguna línea cuenta como no tener notas:
+ * la sección desaparece en vez de dejar un hueco con el rótulo solo.
+ */
+export function parseNotas(text: string, mtimeMs: number): Notas {
+  const lines: string[] = []
+  for (const raw of text.split('\n')) {
+    const line = raw.trim()
+    if (!line || ADORNO.test(line)) continue
+    lines.push(line.replace(VINETA, '• '))
+  }
+  return { lines, mtimeMs }
 }

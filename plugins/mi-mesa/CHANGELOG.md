@@ -1,5 +1,42 @@
 # Changelog
 
+## [1.1.0] — 2026-10-24
+
+### El post-it de las notas
+
+- Una sección nueva arriba del todo con lo que haya escrito en `NOTAS.md` de la
+  raíz del repositorio: en la raíz y no en `docs/`, porque es un fichero que
+  escribes tú y que el repositorio versiona, para que la nota viaje con la rama.
+- **Solo aparece cuando hay notas**: sin fichero, o con un fichero que no deja
+  ninguna línea útil, no se pinta ni el rótulo.
+- Sin formato que cumplir: fuera cabeceras, rayas, citas y líneas en blanco, y
+  las viñetas se unifican en una sola. Caben cinco líneas; de ahí para arriba el
+  rótulo dice cuántas quedan (` NOTAS · +2 `).
+- Se relee con el mismo trato que la mesa: cada 15 s y solo si cambió el
+  `mtime`. Un post-it ilegible no tira el panel.
+- Rótulo con `inverse` sobre amarillo, que es lo que lo lee como nota pegada.
+  Se queda las filas que necesite y el resto se reparte 3/4 y 1/4 como antes.
+
+### El sonido al acabar el turno
+
+- Un clip corto (`sounds/listo.wav`, del propio mod) cuando Claude acaba de
+  contestar, con un hook de `turn.complete`.
+- Solo con `reason: 'answer'`: interrupción, error de la API y rechazo callan.
+  Y solo en el bucle principal, filtrando por `agentId`: un turno con cinco
+  subagentes termina seis veces y sonaría seis.
+- Se apaga desde `/config` (`userConfig.sonido`), sin desinstalar nada.
+- Solo suena en macOS, donde el motor tiene `afplay`; en Linux y Windows no
+  suena nada y no falla. Se lanza sin `await` y con el fallo tragado: ni retrasa
+  ni rompe la respuesta.
+
+### Tests
+
+- Los mocks de ficheros de `pane.test.ts` contestan **por ruta**: con un
+  `fs.exists` que decía `true` a todo, NOTAS.md recibía el Markdown de la mesa y
+  el post-it salía con los tickets dentro.
+- De 10 a 19 tests: post-it presente, ausente, truncado y vacío; el sonido al
+  contestar, callado en los otros casos, apagado por config y fallando el clip.
+
 ## [1.0.0] — 2026-10-08
 
 Primera versión publicada. Las anteriores (0.1.0 a 0.7.0) solo existieron en la
