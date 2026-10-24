@@ -5,3 +5,9 @@ plugins/*/.claude-plugin/types/
 
 .DS_Store
 node_modules/
+
+# El post-it de este repositorio. Aquí no se trackea: este repo es el del mod,
+# no uno de trabajo, y lo que hay dentro son pruebas. En los repos de trabajo
+# sí se commitea —para eso está en la raíz, para que la nota viaje con la rama—,
+# así que esta línea no se copia a los suyos.
+/NOTAS.md
