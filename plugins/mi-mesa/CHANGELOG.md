@@ -1,5 +1,34 @@
 # Changelog
 
+## [1.2.0] — 2026-10-24
+
+### Poner y quitar notas sin saberse nada
+
+- Una herramienta registrada (`mcp__mi-mesa__nota`) con las tres operaciones:
+  añadir, quitar y listar. Con eso «crea una nota en mi mesa» funciona en
+  cualquier repositorio del equipo, sin documentar un formato ni añadir líneas
+  a ningún `CLAUDE.md`: la descripción de la herramienta se explica sola, y
+  dice además que `docs/MI-MESA.md` no se toca porque es generado.
+- Va **no diferida**: diferida, el modelo solo ve el nombre y tiene que pedir
+  el esquema, y lo que se quiere es que la alcance sin pensarlo.
+- Comando `/nota <texto>`, `/nota --quitar <texto>` y `/nota` a secas, que
+  lista. Determinista y sin gastar un turno del modelo en tres palabras.
+- Las dos entradas pasan por la misma función, así que escriben el mismo
+  formato, y las dos relean al escribir: la nota sale en el panel al momento.
+- Quitar exige que no haya duda: se busca sin tildes ni mayúsculas, y con cero
+  o con varias candidatas no se toca el fichero y se dice con cuáles casó.
+  Borrar la nota equivocada es peor que no borrar ninguna.
+- Añadir no reescribe: `NOTAS.md` lo escribe una persona y puede tener lo que
+  quiera dentro, así que solo se toca el final. Un fichero que no existe nace
+  con su cabecera, y la viñeta no se duplica cuando quien dicta la nota repite
+  la `•` que está viendo en el panel.
+- La herramienta se declara en el contrato del mod (`McpToolInputs`): los tipos
+  que escribe el motor solo conocen las herramientas de la build y las de los
+  servidores MCP conectados, y sin eso el matcher de `tool.call` no la admite.
+- Los mocks de ficheros de los tests pasan a ser un disco en memoria con el
+  `mtime` subiendo en cada escritura, que es la condición con la que el panel
+  decide releer. De 19 a 30 tests.
+
 ## [1.1.0] — 2026-10-24
 
 ### El post-it de las notas

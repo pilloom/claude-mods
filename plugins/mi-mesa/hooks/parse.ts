@@ -107,8 +107,14 @@ export function parseHistory(text: string, project: string, limit: number): Prom
 /** Cabeceras y adornos que el post-it no pinta: el rótulo ya lo pone el panel. */
 const ADORNO = /^(#{1,6}\s|[-=*_]{3,}\s*$|>\s?)/u
 
-/** La viñeta de una lista de Markdown, que se cambia por una sola. */
-const VINETA = /^\s*(?:[-*+]|\d+[.)])\s+/u
+/**
+ * La viñeta de una lista de Markdown, que se cambia por una sola.
+ *
+ * Incluye la `•` que el panel ya pinta, porque también entra por el otro lado:
+ * quien dicta una nota puede repetir la viñeta que está viendo, y entonces la
+ * línea se guardaría con dos.
+ */
+const VINETA = /^\s*(?:[-*+•]|\d+[.)])\s+/u
 
 /**
  * Lee NOTAS.md como un post-it: las líneas que hay, en su orden y sin adornos.
@@ -130,4 +136,63 @@ export function parseNotas(text: string, mtimeMs: number): Notas {
     lines.push(line.replace(VINETA, '• '))
   }
   return { lines, mtimeMs }
+}
+
+/** El mismo texto sin tildes ni mayúsculas, para buscar como se busca a mano. */
+function plano(s: string): string {
+  return s.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase()
+}
+
+/**
+ * Devuelve el fichero con una nota más al final.
+ *
+ * Añade, no reescribe: NOTAS.md lo escribe una persona y puede tener lo que
+ * quiera dentro —párrafos, secciones, lo que sea—, así que lo único que se
+ * toca es el final. Un fichero que no existe todavía nace con su cabecera.
+ *
+ * La viñeta se pone aquí y se quita de lo que llegue: quien dicta la nota
+ * mirando el panel repite la `•` que está viendo, y la línea acabaría con dos.
+ */
+export function anadirNota(text: string, nota: string): string {
+  const limpia = nota.trim().replace(/\s+/gu, ' ').replace(VINETA, '')
+  if (!limpia) return text
+  const base = text.trimEnd()
+  return base ? `${base}\n- ${limpia}\n` : `# Notas\n\n- ${limpia}\n`
+}
+
+/** Lo que deja un intento de quitar una nota: el fichero y a qué casó. */
+export type Quitada = {
+  /** El fichero resultante; el mismo de entrada si no se quitó nada. */
+  texto: string
+  /** La nota que se quitó, solo si casó exactamente una. */
+  quitada?: string
+  /** Todas las que casaron, para poder decir por qué no se quitó ninguna. */
+  candidatas: string[]
+}
+
+/**
+ * Quita **una** nota, la que case con `patron`, y solo si no hay duda.
+ *
+ * Con cero o con más de una casando no se toca el fichero: se devuelven las
+ * candidatas para que quien llame lo diga. Borrar la nota equivocada es peor
+ * que no borrar ninguna, y acertando a medias no hay manera de saber cuál
+ * querías. Se busca sin tildes y sin mayúsculas, como se busca a mano.
+ */
+export function quitarNota(text: string, patron: string): Quitada {
+  const aguja = plano(patron.trim())
+  const lines = text.split('\n')
+  const indices: number[] = []
+  for (let i = 0; i < lines.length; i++) {
+    const line = (lines[i] ?? '').trim()
+    if (!line || ADORNO.test(line)) continue
+    if (aguja && plano(line).includes(aguja)) indices.push(i)
+  }
+  const candidatas = indices.map(i => (lines[i] ?? '').trim().replace(VINETA, ''))
+  const unica = indices.length === 1 ? indices[0] : undefined
+  if (unica === undefined) return { texto: text, candidatas }
+  return {
+    texto: lines.filter((_, j) => j !== unica).join('\n'),
+    quitada: candidatas[0],
+    candidatas,
+  }
 }

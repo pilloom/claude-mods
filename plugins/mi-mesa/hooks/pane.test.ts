@@ -1,6 +1,8 @@
 import type { On } from 'claude-code'
 import { expect, mock, test } from 'claude-code/testing'
 
+import { parseNotas } from './parse'
+
 const MD = [
   '> 🤖 **Generado** por `scripts/qa/listar-mi-mesa.js` el 2026-10-07, para **X**.',
   '',
@@ -20,22 +22,33 @@ const MD = [
 const ROOT = '/x/RBSistemas/lanzadera/backend_lanzadera'
 
 /**
- * Los dos ficheros que lee el panel, cada uno contestado por su ruta.
+ * Un disco en memoria con los ficheros que el panel lee y escribe.
  *
- * Importa separarlos: con un `fs.exists` que dice `true` a todo, NOTAS.md
- * recibe el Markdown de la mesa y el post-it sale con los tickets dentro. Un
- * fichero a `undefined` es el que ese repositorio no tiene, que para las notas
- * es el caso normal.
+ * Cada ruta se contesta por separado: con un `fs.exists` que dice `true` a
+ * todo, NOTAS.md recibe el Markdown de la mesa y el post-it sale con los
+ * tickets dentro. Una ruta que no está es el fichero que ese repositorio no
+ * tiene, que para las notas es el caso normal.
+ *
+ * El `mtime` sube en cada escritura, porque es la condición con la que el panel
+ * decide releer: con uno fijo, una nota escrita no se vería hasta cambiarlo.
  */
-function ficheros(on: On, root: string, mesa?: string, notas?: string): void {
-  const porRuta = (path: string): string | undefined =>
-    path === `${root}/docs/MI-MESA.md` ? mesa : path === `${root}/NOTAS.md` ? notas : undefined
+function ficheros(on: On, root: string, mesa?: string, notas?: string): Map<string, string> {
+  const disco = new Map<string, string>()
+  if (mesa !== undefined) disco.set(`${root}/docs/MI-MESA.md`, mesa)
+  if (notas !== undefined) disco.set(`${root}/NOTAS.md`, notas)
+  let version = 1
   on('session.root', async () => ({ value: root }))
-  on('fs.exists', async (_, e) => ({ value: porRuta(e.path) !== undefined }))
+  on('fs.exists', async (_, e) => ({ value: disco.has(e.path) }))
   on('fs.stat', async (_, e) => ({
-    value: { kind: 'file' as const, size: (porRuta(e.path) ?? '').length, mtimeMs: 1, isLink: false },
+    value: { kind: 'file' as const, size: (disco.get(e.path) ?? '').length, mtimeMs: version, isLink: false },
   }))
-  on('fs.read', async (_, e) => ({ value: porRuta(e.path) ?? '' }))
+  on('fs.read', async (_, e) => ({ value: disco.get(e.path) ?? '' }))
+  on('fs.write', async (_, e) => {
+    disco.set(e.path, e.text)
+    version += 1
+    return { value: undefined }
+  })
+  return disco
 }
 
 /** El panel se deja abrir, y el test se queda con los títulos que pidió. */
@@ -236,4 +249,84 @@ test('el turno sigue adelante aunque el clip falle', async ($, on) => {
   const res = await $.turn.complete(turno({ answer: 'la respuesta entera' }))
   await clock.settle()
   expect(res.text).toEqual('la respuesta entera')
+})
+
+const NOTAS_FILE = `${ROOT}/NOTAS.md`
+
+/**
+ * Lo que el modelo lee de una llamada a la herramienta.
+ *
+ * No es `res.text`: ese lo pone el núcleo para las herramientas que ejecuta él,
+ * y está ausente cuando el que contesta es un hook con su propio `result`.
+ */
+function leido(res: { result?: unknown }): string {
+  const { content } = (res.result ?? {}) as { content?: { text?: string }[] }
+  return content?.[0]?.text ?? ''
+}
+
+test('/nota escribe la nota y el panel la enseña sin esperar el ciclo', async ($, on) => {
+  const disco = ficheros(on, ROOT, MD)
+  abre(on)
+  const { text } = await $.command.run({ command: 'nota', args: 'el deploy del viernes no va' } as never)
+  expect(text).toEqual('Añadida a NOTAS.md (1 en total).')
+  // Un repositorio sin post-it lo estrena con su cabecera.
+  expect(disco.get(NOTAS_FILE)).toEqual('# Notas\n\n- el deploy del viernes no va\n')
+  const ui = await $.ui.mount({ plugin: 'mi-mesa', surface: 'terminal', component: 'Pane', requestId: 'mi-mesa', props: {} as never })
+  expect(await ui.find({ type: 'Text', text: '• el deploy del viernes no va' })).toBeDefined()
+  await ui.unmount()
+})
+
+test('/nota sin argumentos lista, y no añade una nota vacía', async ($, on) => {
+  const disco = ficheros(on, ROOT, MD, '# Notas\n\n- una cosa\n')
+  abre(on)
+  const { text } = await $.command.run({ command: 'nota', args: '' } as never)
+  expect(text).toEqual('1 nota en NOTAS.md:\n• una cosa')
+  expect(disco.get(NOTAS_FILE)).toEqual('# Notas\n\n- una cosa\n')
+})
+
+test('/nota --quitar quita la que casa', async ($, on) => {
+  const disco = ficheros(on, ROOT, MD, '# Notas\n\n- llamar al banco\n- firmar el anexo\n')
+  abre(on)
+  const { text } = await $.command.run({ command: 'nota', args: '--quitar banco' } as never)
+  expect(text).toEqual('Quitada de NOTAS.md: llamar al banco')
+  expect(disco.get(NOTAS_FILE)).toEqual('# Notas\n\n- firmar el anexo\n')
+})
+
+test('la herramienta añade, lista y quita, y el modelo lee qué pasó', async ($, on) => {
+  const disco = ficheros(on, ROOT, MD)
+  abre(on)
+  const llamar = async (accion: string, texto?: string) =>
+    await $.tool.call({ tool: 'mcp__mi-mesa__nota', accion, texto } as never)
+
+  const puesta = await llamar('anadir', 'pedir las claves de staging')
+  expect(leido(puesta)).toEqual('Añadida a NOTAS.md (1 en total).')
+  expect(disco.get(NOTAS_FILE)).toEqual('# Notas\n\n- pedir las claves de staging\n')
+
+  const lista = await llamar('listar')
+  expect(leido(lista)).toEqual('1 nota en NOTAS.md:\n• pedir las claves de staging')
+
+  const fuera = await llamar('quitar', 'claves')
+  expect(leido(fuera)).toEqual('Quitada de NOTAS.md: pedir las claves de staging')
+  expect(parseNotas(disco.get(NOTAS_FILE) ?? '', 1).lines).toEqual([])
+})
+
+test('quitar con varias candidatas no toca el fichero y lo dice', async ($, on) => {
+  const antes = '# Notas\n\n- llamar al banco\n- volver a llamar al banco\n'
+  const disco = ficheros(on, ROOT, MD, antes)
+  abre(on)
+  const res = await $.tool.call({ tool: 'mcp__mi-mesa__nota', accion: 'quitar', texto: 'banco' } as never)
+  expect(leido(res)).toEqual(
+    '«banco» casa con 2 notas y no se quitó ninguna. Hay que concretar:\nllamar al banco\nvolver a llamar al banco',
+  )
+  expect(disco.get(NOTAS_FILE)).toEqual(antes)
+})
+
+test('una acción que no es ninguna de las tres no escribe nada', async ($, on) => {
+  const antes = '# Notas\n\n- una cosa\n'
+  const disco = ficheros(on, ROOT, MD, antes)
+  abre(on)
+  // El esquema la valida, pero el valor llega como lo mande el modelo.
+  const res = await $.tool.call({ tool: 'mcp__mi-mesa__nota', accion: 'borrar todo', texto: 'x' } as never)
+  expect(leido(res)).toEqual('1 nota en NOTAS.md:\n• una cosa')
+  expect(disco.get(NOTAS_FILE)).toEqual(antes)
 })

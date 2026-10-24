@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 
-import { parseHistory, parseMesa, parseNotas } from './parse'
+import { anadirNota, parseHistory, parseMesa, parseNotas, quitarNota } from './parse'
 
 const SAMPLE = `# Mi mesa de trabajo
 
@@ -149,4 +149,40 @@ test('el post-it deja las líneas que hay, sin cabeceras ni rayas', () => {
 
 test('un fichero de solo adornos cuenta como no tener notas', () => {
   expect(parseNotas('# Notas\n\n===\n\n', 7).lines).toEqual([])
+})
+
+test('la nota se añade al final, y un fichero que no existe nace con cabecera', () => {
+  expect(anadirNota('', 'la primera')).toEqual('# Notas\n\n- la primera\n')
+  expect(anadirNota('# Notas\n\n- una\n', 'otra')).toEqual('# Notas\n\n- una\n- otra\n')
+})
+
+test('la viñeta no se duplica ni la pone quien dicta la nota', () => {
+  // Quien la dicta mirando el panel repite la `•` que está viendo.
+  expect(anadirNota('', '• ya con viñeta')).toEqual('# Notas\n\n- ya con viñeta\n')
+  expect(anadirNota('', '- y con guion')).toEqual('# Notas\n\n- y con guion\n')
+  expect(anadirNota('', '  dos   espacios  dentro ')).toEqual('# Notas\n\n- dos espacios dentro\n')
+})
+
+test('quitar casa sin tildes ni mayúsculas y deja el resto intacto', () => {
+  const { texto, quitada } = quitarNota('# Notas\n\n- Llamar al Banco Sabadell\n- firmar\n', 'banco sabadell')
+  expect(quitada).toEqual('Llamar al Banco Sabadell')
+  expect(texto).toEqual('# Notas\n\n- firmar\n')
+})
+
+test('quitar con cero o con varias candidatas no toca el fichero', () => {
+  const antes = '# Notas\n\n- llamar al banco\n- volver a llamar al banco\n'
+  const varias = quitarNota(antes, 'banco')
+  expect(varias.quitada).toBeUndefined()
+  expect(varias.texto).toEqual(antes)
+  expect(varias.candidatas).toEqual(['llamar al banco', 'volver a llamar al banco'])
+
+  const ninguna = quitarNota(antes, 'hacienda')
+  expect(ninguna.quitada).toBeUndefined()
+  expect(ninguna.texto).toEqual(antes)
+  expect(ninguna.candidatas).toEqual([])
+})
+
+test('quitar no casa contra las cabeceras del fichero', () => {
+  // `Notas` está en la cabecera, no en ninguna nota: no hay candidata.
+  expect(quitarNota('# Notas\n\n- una cosa\n', 'notas').candidatas).toEqual([])
 })

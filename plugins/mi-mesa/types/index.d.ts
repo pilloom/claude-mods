@@ -36,8 +36,23 @@ export type Notas = {
   mtimeMs: number
 }
 
+/** Lo que la herramienta del mod recibe; `accion` la valida su esquema. */
+export type NotaInput = {
+  accion?: 'anadir' | 'quitar' | 'listar'
+  texto?: string
+}
+
 declare module 'claude-code' {
   interface PluginState {
     'mi-mesa': { mesa: Mesa; prompts: Prompt[]; notas: Notas }
+  }
+  /**
+   * La herramienta que el mod registra en marcha, declarada aquí porque los
+   * tipos que escribe el motor solo conocen las herramientas de la build y las
+   * de los servidores MCP conectados: la de un mod no está en ninguna de las
+   * dos listas, y sin esto el matcher de `tool.call` no la admite.
+   */
+  interface McpToolInputs {
+    'mcp__mi-mesa__nota': NotaInput
   }
 }

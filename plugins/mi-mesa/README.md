@@ -80,6 +80,47 @@ blanco se tiran. Caben cinco; de ahí para arriba el rótulo dice cuántas queda
 Es **un** post-it, no un tablero: la idea es la nota de encima de la mesa, lo
 que no quieres que se te pase esta semana. Para más de eso está la mesa.
 
+## Poner y quitar notas
+
+Pidiéndolo, en cualquier repositorio y sin saberse nada:
+
+```
+> crea una nota en mi mesa: el deploy del viernes no va
+> quita la nota del deploy
+```
+
+El mod registra una herramienta (`mcp__mi-mesa__nota`) que el modelo alcanza con
+eso. Va **no diferida** a propósito: diferida, el modelo solo ve el nombre y
+tiene que pedir el esquema, y lo que se quiere es que la coja sin pensarlo. El
+esquema en el prompt cuesta unos cien tokens por sesión; que no acierte cuesta
+que alguien edite a mano `docs/MI-MESA.md`, que es generado y se reescribe.
+
+Su descripción se lo dice al modelo con todas las letras: las notas van en
+`NOTAS.md`, no se edita con Write ni con Edit, y `docs/MI-MESA.md` no se toca.
+Por eso **no hay que documentarle nada al equipo ni añadir líneas a ningún
+`CLAUDE.md`**: instalan el mod y la herramienta se explica sola.
+
+Tecleando, cuando no quieres gastar un turno del modelo en tres palabras:
+
+```
+/nota el deploy del viernes no va      # la añade
+/nota --quitar deploy                  # la quita
+/nota                                  # lista las que hay
+```
+
+Las dos entradas pasan por el mismo código y escriben el mismo formato, así que
+no acaban siendo dos post-its distintos según por dónde entres. Y las dos
+releen el fichero al escribir: la nota aparece en el panel en el momento, sin
+esperar el ciclo de 15 s.
+
+**Quitar exige que no haya duda.** Se busca sin tildes ni mayúsculas, como se
+busca a mano, y si el texto casa con dos notas —o con ninguna— no se toca el
+fichero: se dice con cuáles casó. Borrar la nota equivocada es peor que no
+borrar ninguna, y acertando a medias no hay manera de saber cuál era.
+
+Añadir **no reescribe** el fichero: `NOTAS.md` lo escribes tú y puede tener lo
+que quieras dentro, así que lo único que se toca es el final.
+
 ## El sonido
 
 Al acabar un turno suena un clip corto (`sounds/listo.wav`, un fichero del
@@ -133,7 +174,7 @@ las dos se verían apagadas**: están en un solo sitio cada una, al final de
 
 ```bash
 claude plugin validate .            # manifiesto y módulo, como los lee el motor
-claude plugin test .                # 19 tests
+claude plugin test .                # 30 tests
 ```
 
 Para los tipos hace falta que el motor haya cargado el mod alguna vez desde su

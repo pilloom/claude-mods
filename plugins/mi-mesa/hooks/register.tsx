@@ -2,7 +2,7 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
 import type { Mesa, Notas, Prompt } from '../types'
-import { parseHistory, parseMesa, parseNotas } from './parse'
+import { anadirNota, parseHistory, parseMesa, parseNotas, quitarNota } from './parse'
 
 const PANE = 'mi-mesa'
 const MESA_FILE = 'docs/MI-MESA.md'
@@ -16,6 +16,8 @@ const NOTAS_FILE = 'NOTAS.md'
 const NOTAS_MAX = 5
 /** El clip que suena al acabar el turno; es un fichero del propio mod. */
 const SONIDO = 'sounds/listo.wav'
+/** La herramienta del mod, como la nombra el motor y la llama el modelo. */
+const HERRAMIENTA = 'mcp__mi-mesa__nota'
 /** Cuántos de tus mensajes guarda y pinta el cuarto de abajo. */
 const ULTIMOS = 10
 /** Cola del historial que se lee: de sobra para sacar 10 de este repo entre los cuatro. */
@@ -78,6 +80,64 @@ async function refreshNotas($: EngineInterface): Promise<void> {
   }
 }
 
+/** La ruta del post-it del repositorio de la sesión. */
+async function notasFile($: EngineInterface): Promise<string> {
+  const { root } = await repoOf($)
+  return `${root}/${NOTAS_FILE}`
+}
+
+/** Lo que hay escrito ahora, o cadena vacía si todavía no hay fichero. */
+async function leerNotas($: EngineInterface, file: string): Promise<string> {
+  return (await $.fs.exists(file)) ? await $.fs.read(file) : ''
+}
+
+/**
+ * Las tres operaciones sobre el post-it, en un solo sitio.
+ *
+ * La herramienta y `/nota` llaman aquí las dos: pasan por el mismo código y
+ * escriben el mismo formato, que es lo que evita que acaben siendo dos post-its
+ * distintos según por dónde entres. Devuelven la frase que se lee, porque las
+ * dos tienen que decir qué pasó —una al modelo y otra a ti— y conviene que
+ * digan lo mismo.
+ *
+ * Tras escribir se relee: el panel no espera al ciclo de 15 s para enseñar la
+ * nota que acabas de dictar.
+ */
+async function nota(
+  $: EngineInterface,
+  accion: 'anadir' | 'quitar' | 'listar',
+  texto: string,
+): Promise<string> {
+  const file = await notasFile($)
+  const antes = await leerNotas($, file)
+  const hay = parseNotas(antes, 1).lines
+
+  if (accion === 'listar') {
+    return hay.length === 0
+      ? `No hay notas en ${NOTAS_FILE}.`
+      : `${hay.length} ${hay.length === 1 ? 'nota' : 'notas'} en ${NOTAS_FILE}:\n${hay.join('\n')}`
+  }
+
+  if (accion === 'anadir') {
+    if (!texto.trim()) return 'Hace falta el texto de la nota.'
+    await $.fs.write(file, anadirNota(antes, texto))
+    await refreshNotas($)
+    return `Añadida a ${NOTAS_FILE} (${hay.length + 1} en total).`
+  }
+
+  if (!texto.trim()) return 'Hace falta decir qué nota se quita.'
+  const { texto: despues, quitada, candidatas } = quitarNota(antes, texto)
+  if (quitada === undefined) {
+    // Con cero o con varias no se toca nada: borrar la equivocada es peor.
+    return candidatas.length === 0
+      ? `Ninguna nota de ${NOTAS_FILE} dice «${texto}». Las que hay:\n${hay.join('\n') || '(ninguna)'}`
+      : `«${texto}» casa con ${candidatas.length} notas y no se quitó ninguna. Hay que concretar:\n${candidatas.join('\n')}`
+  }
+  await $.fs.write(file, despues)
+  await refreshNotas($)
+  return `Quitada de ${NOTAS_FILE}: ${quitada}`
+}
+
 /**
  * Relee la cola del historial y deja la lista entera, no un añadido.
  *
@@ -129,6 +189,42 @@ export const register: Register = (on, options) => {
       name: 'mi-mesa',
       description: 'Abre el panel con los tickets de docs/MI-MESA.md del repo',
     })
+    await $.command.register({
+      name: 'nota',
+      description: 'Añade una nota al post-it del panel; --quitar <texto> la quita, sin nada las lista',
+    })
+    // `isDeferred: false`: con la herramienta diferida el modelo solo ve el
+    // nombre y tiene que pedir el esquema, y lo que se quiere es justo que la
+    // alcance sin pensarlo cuando le dices «crea una nota en mi mesa». El
+    // esquema en el prompt cuesta unos cien tokens por sesión; que no acierte
+    // cuesta que alguien edite a mano el fichero generado de la mesa.
+    await $.tool.register({
+      name: 'nota',
+      isDeferred: false,
+      description: [
+        'Gestiona el post-it de este repositorio, el fichero NOTAS.md de su raíz,',
+        'que el panel «Mi mesa» pinta arriba. Úsala cuando te pidan apuntar, añadir',
+        'o quitar una nota, un recordatorio o un post-it «en mi mesa» o «en el panel».',
+        'No edites NOTAS.md a mano con Write ni con Edit, y no toques nunca',
+        'docs/MI-MESA.md: ese lo genera un guion y se reescribe entero.',
+      ].join(' '),
+      inputSchema: {
+        type: 'object',
+        properties: {
+          accion: {
+            type: 'string',
+            enum: ['anadir', 'quitar', 'listar'],
+            description: 'anadir una nota, quitar la que case con el texto, o listar las que hay',
+          },
+          texto: {
+            type: 'string',
+            description:
+              'La nota, al añadir; parte de la nota que se quiere quitar, al quitar; se ignora al listar',
+          },
+        },
+        required: ['accion'],
+      },
+    })
     await refresh($)
     await refreshNotas($)
     await refreshPrompts($)
@@ -163,6 +259,28 @@ export const register: Register = (on, options) => {
       )
     }
     return next(e)
+  })
+
+  /**
+   * Sirve la herramienta: una llamada que ningún hook contesta falla.
+   *
+   * `accion` viene validada por el esquema, pero el valor llega como lo mande
+   * el modelo, así que se comprueba aquí: lo que no sea de los tres se trata
+   * como `listar`, que es la operación que no escribe nada.
+   */
+  on('tool.call', { tool: HERRAMIENTA }, async ($, e) => {
+    const accion = e.accion === 'anadir' || e.accion === 'quitar' ? e.accion : 'listar'
+    const text = await nota($, accion, e.texto ?? '')
+    return { result: { content: [{ type: 'text', text }] } }
+  })
+
+  on('command.run', { command: 'nota' }, async ($, e) => {
+    const args = (e.args ?? '').trim()
+    const quitar = /^--?quitar\s+/u.exec(args)
+    if (quitar) return { text: await nota($, 'quitar', args.slice(quitar[0].length)) }
+    // Sin argumentos no se escribe nada: se enseña lo que hay, que es lo que
+    // un comando a medio teclear debe hacer en vez de añadir una nota vacía.
+    return { text: await nota($, args ? 'anadir' : 'listar', args) }
   })
 
   /**
