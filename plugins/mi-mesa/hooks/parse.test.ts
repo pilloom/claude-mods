@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 
-import { anadirNota, parseHistory, parseMesa, parseNotas, quitarNota } from './parse'
+import { anadirNota, envolver, parseHistory, parseMesa, parseNotas, quitarNota } from './parse'
 
 const SAMPLE = `# Mi mesa de trabajo
 
@@ -185,4 +185,31 @@ test('quitar con cero o con varias candidatas no toca el fichero', () => {
 test('quitar no casa contra las cabeceras del fichero', () => {
   // `Notas` está en la cabecera, no en ninguna nota: no hay candidata.
   expect(quitarNota('# Notas\n\n- una cosa\n', 'notas').candidatas).toEqual([])
+})
+
+test('una nota corta se queda en su fila, como estaba', async () => {
+  expect(envolver('• una nota corta', 30)).toEqual(['• una nota corta'])
+  // Justo del ancho tampoco se parte: el corte es por pasarse, no por llegar.
+  expect(envolver('• doce chars', 12)).toEqual(['• doce chars'])
+})
+
+test('una nota larga se enseña entera, partida por los espacios y sangrada', async () => {
+  expect(envolver('• pedir las claves de staging a Marta antes del jueves', 30)).toEqual([
+    '• pedir las claves de staging',
+    '  a Marta antes del jueves',
+  ])
+})
+
+test('una palabra más larga que la fila se parte en vez de dejarla en blanco', async () => {
+  // La viñeta sale del texto: dentro, el espacio que lleva detrás sería el
+  // último hueco de la fila y la primera saldría con la viñeta sola.
+  expect(envolver('• https://ejemplo.test/un/enlace/larguisimo', 20)).toEqual([
+    '• https://ejemplo.te',
+    '  st/un/enlace/largu',
+    '  isimo',
+  ])
+})
+
+test('una línea sin viñeta se parte sin inventarse una sangría', async () => {
+  expect(envolver('cuatro cinco seis siete', 12)).toEqual(['cuatro cinco', 'seis siete'])
 })
