@@ -34,6 +34,13 @@ export type Prompt = {
 export type Notas = {
   lines: string[]
   mtimeMs: number
+  /**
+   * El post-it está siendo versionado por el repositorio, que es justo lo que
+   * no debe pasar: son notas de una persona. Solo lo sabe el repositorio donde
+   * alguien lo commiteó antes de que el mod lo apuntara en `.git/info/exclude`,
+   * y el panel lo avisa en el rótulo porque de ahí no se sale solo.
+   */
+  enGit?: boolean
 }
 
 /** Lo que la herramienta del mod recibe; `accion` la valida su esquema. */

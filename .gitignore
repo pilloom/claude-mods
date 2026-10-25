@@ -6,8 +6,9 @@ plugins/*/.claude-plugin/types/
 .DS_Store
 node_modules/
 
-# El post-it de este repositorio. Aquí no se trackea: este repo es el del mod,
-# no uno de trabajo, y lo que hay dentro son pruebas. En los repos de trabajo
-# sí se commitea —para eso está en la raíz, para que la nota viaje con la rama—,
-# así que esta línea no se copia a los suyos.
+# El post-it de «Mi mesa». No se trackea en ningún repositorio: son las notas
+# de una persona, no del proyecto. En los repos de trabajo lo apunta el propio
+# mod en .git/info/exclude, que es el sitio de los ignores de quien tiene el
+# clon; aquí va en el .gitignore porque este repo es el del mod y la línea
+# documenta la decisión.
 /NOTAS.md

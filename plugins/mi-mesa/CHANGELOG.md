@@ -1,5 +1,74 @@
 # Changelog
 
+## [1.2.1] — 2026-10-25
+
+### Una equis para quitar la nota
+
+- Cada nota del post-it lleva su `×` delante, y al pulsarla se quita del
+  fichero y del panel. Apagada en reposo y en rojo al pasar por encima de la
+  nota entera, que es el ámbito del hover: el glifo solo es un blanco de un
+  carácter en un terminal.
+- Quita **por el sitio y no por el texto** (`quitarNotaN`): la equis señala
+  una nota con el dedo y no hay duda que resolver, así que dos notas iguales
+  —que `quitar` por texto se niega a tocar, y con razón— se distinguen sin
+  problema. Lleva además el texto que el panel tenía pintado, y si el fichero
+  cambió por debajo desde el último redibujado no se quita nada: se relee y se
+  enseña lo que hay, en vez de borrar la de al lado.
+- Se quita en un clic y sin preguntar, y el fichero no guarda historia. Es una
+  nota de una línea; preguntar por cada una cansa más de lo que salva.
+
+### La nota se lee entera
+
+- Una nota más ancha que el panel se recortaba a una fila con un `…`, y había
+  que abrir `NOTAS.md` para leer lo que uno mismo había dictado, que es justo
+  lo que el post-it viene a ahorrar. Ahora se envuelve en las filas que
+  necesite, cortando por los espacios y sangrando las siguientes bajo el texto
+  y no bajo la viñeta; una palabra más larga que la fila se parte por donde
+  toque. La mesa sigue recortando, que ahí sí es lo que se quiere.
+- La viñeta sale del texto y pasa a ser el margen de la primera fila: dentro,
+  el espacio que lleva detrás era el último hueco de la fila para una nota que
+  empieza por un enlace, y la primera fila salía con la viñeta sola.
+- El post-it no se queda con el panel: además de las cinco notas de siempre,
+  no pasa de media altura del cuerpo. La nota que no entra entera no se pinta
+  a medias, se cuenta en el rótulo. Una nota sola más larga que ese tope se
+  pinta igual, porque dejarlo en blanco teniendo algo escrito es peor.
+
+### La herramienta escribía bien y contestaba error
+
+- El hook de `tool.call` devolvía `{ result: { content: [{ type: 'text', … }] } }`,
+  y una herramienta registrada por un mod no declara esquema de salida: el que
+  el núcleo le pone admite `string`, lista de bloques o nada. La nota se
+  escribía entera y la llamada contestaba `invalid_union`, que es el peor
+  resultado posible aquí —quien lee el error da por hecho que no se guardó,
+  repite la llamada y acaba con la nota duplicada—. Las tres acciones estaban
+  igual, así que `listar` tampoco servía para comprobar el estado y había que
+  abrir el fichero a mano, que es justo lo que la herramienta viene a evitar.
+  Ahora el `result` es la frase pelada.
+- El test leía `result.content[0].text`, la forma que el motor rechaza, y
+  pasaba: el banco de pruebas no valida el esquema de salida. Ahora exige que
+  el resultado sea una cadena, que es lo que sujeta la forma.
+
+### El post-it es de quien lo escribe, y deja de subirse
+
+- Cambia la decisión de 1.1.0: `NOTAS.md` **no** lo versiona el repositorio.
+  Son las notas de una persona, como la mesa, y lo que alguien apunta para sí
+  mismo no viaja en una rama ni sale en un PR. Antes quedaba como fichero sin
+  seguir en la raíz, y un `git add -A` se lo llevaba dentro sin que se notara.
+- El mod lo apunta solo: al leer el post-it escribe `/NOTAS.md` en
+  `.git/info/exclude`, los ignores del clon. Ahí y no en el `.gitignore`, que
+  es del equipo y no tiene por qué llevar una línea de esto; un `.gitignore`
+  que ya lo ignore se respeta y no se duplica, y sin `.git/info` —un worktree,
+  un submódulo, una carpeta que no es un clon— no se apunta nada y el post-it
+  sigue igual.
+- `exclude` no desversiona lo ya versionado, así que un repositorio donde
+  alguien lo commiteó antes sigue publicando esas notas. Eso se avisa donde se
+  ve: el rótulo pasa a ` NOTAS · SE SUBE A GIT: git rm --cached NOTAS.md ` y lo
+  dice hasta que se haga. Las dos comprobaciones de git cuelgan de la relectura
+  y no del ciclo: solo corren cuando el post-it cambia.
+- El `mtime` de los mocks pasa a ser de cada fichero y no un contador
+  compartido: con uno solo, escribir en los ignores del clon haría releer el
+  post-it, que en el disco de verdad no pasa. De 30 a 34 tests.
+
 ## [1.2.0] — 2026-10-24
 
 ### Poner y quitar notas sin saberse nada

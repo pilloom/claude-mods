@@ -29,26 +29,45 @@ const ROOT = '/x/RBSistemas/lanzadera/backend_lanzadera'
  * tickets dentro. Una ruta que no está es el fichero que ese repositorio no
  * tiene, que para las notas es el caso normal.
  *
- * El `mtime` sube en cada escritura, porque es la condición con la que el panel
- * decide releer: con uno fijo, una nota escrita no se vería hasta cambiarlo.
+ * El `mtime` sube en cada escritura, y es de cada fichero: es la condición con
+ * la que el panel decide releer, y con un contador compartido escribir en los
+ * ignores del clon haría releer el post-it, que es lo que en el disco de verdad
+ * no pasa.
+ *
+ * `.git/info` entra como una ruta más para que el mod encuentre dónde apuntar
+ * el post-it; un repositorio que no la tenga es el worktree o la carpeta que no
+ * es un clon, y ahí no se apunta nada.
  */
-function ficheros(on: On, root: string, mesa?: string, notas?: string): Map<string, string> {
+function ficheros(on: On, root: string, mesa?: string, notas?: string, git = true): Map<string, string> {
   const disco = new Map<string, string>()
   if (mesa !== undefined) disco.set(`${root}/docs/MI-MESA.md`, mesa)
   if (notas !== undefined) disco.set(`${root}/NOTAS.md`, notas)
-  let version = 1
+  if (git) disco.set(`${root}/.git/info`, '')
+  const versiones = new Map<string, number>()
   on('session.root', async () => ({ value: root }))
   on('fs.exists', async (_, e) => ({ value: disco.has(e.path) }))
   on('fs.stat', async (_, e) => ({
-    value: { kind: 'file' as const, size: (disco.get(e.path) ?? '').length, mtimeMs: version, isLink: false },
+    value: {
+      kind: 'file' as const,
+      size: (disco.get(e.path) ?? '').length,
+      mtimeMs: versiones.get(e.path) ?? 1,
+      isLink: false,
+    },
   }))
   on('fs.read', async (_, e) => ({ value: disco.get(e.path) ?? '' }))
   on('fs.write', async (_, e) => {
     disco.set(e.path, e.text)
-    version += 1
+    versiones.set(e.path, (versiones.get(e.path) ?? 1) + 1)
     return { value: undefined }
   })
   return disco
+}
+
+/** El post-it no está en git, que es el caso normal una vez el mod lo apunta. */
+function sinGit(on: On): void {
+  on('process.run', async () => ({
+    value: { exitCode: 1, stdout: '', stderr: '', isStdoutTruncated: false, isStderrTruncated: false },
+  }))
 }
 
 /** El panel se deja abrir, y el test se queda con los títulos que pidió. */
@@ -258,10 +277,17 @@ const NOTAS_FILE = `${ROOT}/NOTAS.md`
  *
  * No es `res.text`: ese lo pone el núcleo para las herramientas que ejecuta él,
  * y está ausente cuando el que contesta es un hook con su propio `result`.
+ *
+ * Se exige que sea una cadena, y no se acepta lo que venga: el esquema de
+ * salida que el núcleo le pone a una herramienta de un mod admite `string`,
+ * lista de bloques o nada, y devolviendo un `{ content: [...] }` el panel
+ * escribía la nota pero la llamada contestaba error. Aquí no se validaba el
+ * esquema, así que los tests pasaban con la forma que el motor rechaza; esta
+ * comprobación es la que lo sujeta.
  */
 function leido(res: { result?: unknown }): string {
-  const { content } = (res.result ?? {}) as { content?: { text?: string }[] }
-  return content?.[0]?.text ?? ''
+  expect(typeof res.result).toEqual('string')
+  return (res.result ?? '') as string
 }
 
 test('/nota escribe la nota y el panel la enseña sin esperar el ciclo', async ($, on) => {
@@ -329,4 +355,169 @@ test('una acción que no es ninguna de las tres no escribe nada', async ($, on) 
   const res = await $.tool.call({ tool: 'mcp__mi-mesa__nota', accion: 'borrar todo', texto: 'x' } as never)
   expect(leido(res)).toEqual('1 nota en NOTAS.md:\n• una cosa')
   expect(disco.get(NOTAS_FILE)).toEqual(antes)
+})
+
+const EXCLUDE = `${ROOT}/.git/info/exclude`
+
+test('el post-it se apunta solo en los ignores de este clon, y una sola vez', async ($, on) => {
+  const disco = ficheros(on, ROOT, MD)
+  sinGit(on)
+  abre(on)
+  await $.command.run({ command: 'nota', args: 'pedir las claves de staging' } as never)
+  // En .git/info/exclude y no en el .gitignore: el post-it es de quien tiene el
+  // clon, y el .gitignore lo ve el equipo entero en el diff.
+  expect(disco.get(EXCLUDE)).toEqual(
+    '# El post-it de «Mi mesa»: notas de quien usa este clon.\n/NOTAS.md\n',
+  )
+  expect(disco.has(`${ROOT}/.gitignore`)).toEqual(false)
+  await $.command.run({ command: 'nota', args: 'firmar el anexo' } as never)
+  expect(disco.get(EXCLUDE)).toEqual(
+    '# El post-it de «Mi mesa»: notas de quien usa este clon.\n/NOTAS.md\n',
+  )
+})
+
+test('un .gitignore que ya lo ignora no se duplica en los ignores del clon', async ($, on) => {
+  const disco = ficheros(on, ROOT, MD)
+  disco.set(`${ROOT}/.gitignore`, '.DS_Store\n/NOTAS.md\n')
+  sinGit(on)
+  abre(on)
+  await $.command.run({ command: 'nota', args: 'una cosa' } as never)
+  expect(disco.has(EXCLUDE)).toEqual(false)
+})
+
+test('sin .git no se apunta nada y el post-it funciona igual', async ($, on) => {
+  const disco = ficheros(on, ROOT, MD, undefined, false)
+  sinGit(on)
+  abre(on)
+  const { text } = await $.command.run({ command: 'nota', args: 'una cosa' } as never)
+  expect(text).toEqual('Añadida a NOTAS.md (1 en total).')
+  expect(disco.has(EXCLUDE)).toEqual(false)
+})
+
+test('si el repositorio ya versiona el post-it, el rótulo lo dice', async ($, on) => {
+  ficheros(on, ROOT, MD, '# Notas\n\n- pedir las claves de staging\n')
+  // `git ls-files --error-unmatch` lo encuentra: alguien lo commiteó antes de
+  // que el mod lo apuntara, y de ahí no saca a nadie el exclude.
+  on('process.run', async () => ({
+    value: { exitCode: 0, stdout: 'NOTAS.md\n', stderr: '', isStdoutTruncated: false, isStderrTruncated: false },
+  }))
+  abre(on)
+  await $.command.run({ command: 'mi-mesa', args: '' } as never)
+  const ui = await $.ui.mount({ plugin: 'mi-mesa', surface: 'terminal', component: 'Pane', requestId: 'mi-mesa', props: {} as never })
+  const rotulo = await ui.find({ type: 'Text', text: /SE SUBE A GIT: git rm --cached NOTAS\.md/u })
+  expect(rotulo).toBeDefined()
+  await ui.unmount()
+})
+
+test('una nota larga se enseña entera, en varias filas y no recortada', async ($, on) => {
+  ficheros(on, ROOT, MD, '# Notas\n\n- pedir las claves de staging a Marta antes del jueves\n')
+  sinGit(on)
+  abre(on)
+  await $.command.run({ command: 'mi-mesa', args: '' } as never)
+  const ui = await $.ui.mount({
+    plugin: 'mi-mesa',
+    surface: 'terminal',
+    component: 'Pane',
+    props: { bodyColumns: 30, scroll: { offset: 0, bodyRows: 40 } } as never,
+    requestId: 'mi-mesa',
+  })
+  // Las filas son del ancho del cuerpo menos la equis de quitar y su espacio.
+  expect(await ui.find({ type: 'Text', text: '• pedir las claves de' })).toBeDefined()
+  // Lo que antes se perdía detrás del «…», sangrado bajo el texto de arriba.
+  expect(await ui.find({ type: 'Text', text: '  staging a Marta antes del' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: '  jueves' })).toBeDefined()
+  // Ninguna nota acaba en «…»; la mesa sí recorta, y eso se queda como está.
+  expect(await ui.find({ type: 'Text', text: /^• .*…/u })).toBeUndefined()
+  await ui.unmount()
+})
+
+test('con notas largas el post-it se para a la mitad y cuenta las que no caben', async ($, on) => {
+  const largas = [
+    'pedir las claves de staging a Marta antes del jueves',
+    'revisar el contrato del latido antes de subir la rama',
+    'llamar al banco para firmar el anexo del lunes',
+  ]
+  ficheros(on, ROOT, MD, `# Notas\n\n${largas.map(n => `- ${n}`).join('\n')}\n`)
+  sinGit(on)
+  abre(on)
+  await $.command.run({ command: 'mi-mesa', args: '' } as never)
+  const ui = await $.ui.mount({
+    plugin: 'mi-mesa',
+    surface: 'terminal',
+    component: 'Pane',
+    props: { bodyColumns: 30, scroll: { offset: 0, bodyRows: 12 } } as never,
+    requestId: 'mi-mesa',
+  })
+  // La primera nota son tres filas y la segunda ya no entra entera en las
+  // cinco del tope: no se pinta a medias, se cuenta. Y la mesa no se queda
+  // sin sitio debajo.
+  expect(await ui.find({ type: 'Text', text: /^ NOTAS · \+2 +$/u })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: '  jueves' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /revisar el contrato/u })).toBeUndefined()
+  expect(await ui.find({ type: 'Text', text: /llamar al banco/u })).toBeUndefined()
+  expect(await ui.find({ type: 'Text', text: /MI MESA/u })).toBeDefined()
+  await ui.unmount()
+})
+
+test('la equis de una nota la quita del fichero y del panel', async ($, on) => {
+  const disco = ficheros(on, ROOT, MD, '# Notas\n\n- llamar al banco\n- firmar el anexo\n')
+  sinGit(on)
+  abre(on)
+  await $.command.run({ command: 'mi-mesa', args: '' } as never)
+  const ui = await $.ui.mount({
+    plugin: 'mi-mesa',
+    surface: 'terminal',
+    component: 'Pane',
+    props: { bodyColumns: 40, scroll: { offset: 0, bodyRows: 40 } } as never,
+    requestId: 'mi-mesa',
+  })
+  // Una equis por nota, cada una con su clave: la del panel es la de su sitio.
+  expect(await ui.findAll({ type: 'Button' })).toHaveLength(2)
+  await ui.press({ key: 'quitar-0' })
+  expect(disco.get(NOTAS_FILE)).toEqual('# Notas\n\n- firmar el anexo\n')
+  // El panel no espera al ciclo de 15 s: la nota se va al pulsar.
+  expect(await ui.find({ type: 'Text', text: '• llamar al banco' })).toBeUndefined()
+  expect(await ui.find({ type: 'Text', text: '• firmar el anexo' })).toBeDefined()
+  expect(await ui.findAll({ type: 'Button' })).toHaveLength(1)
+  await ui.unmount()
+})
+
+test('la equis quita la que señala aunque haya dos notas iguales', async ($, on) => {
+  // Por el texto no se podría: `quitarNota` se niega con dos candidatas, y
+  // hace bien. Por el sitio no hay duda que resolver.
+  const disco = ficheros(on, ROOT, MD, '# Notas\n\n- llamar al banco\n- llamar al banco\n')
+  sinGit(on)
+  abre(on)
+  await $.command.run({ command: 'mi-mesa', args: '' } as never)
+  const ui = await $.ui.mount({
+    plugin: 'mi-mesa',
+    surface: 'terminal',
+    component: 'Pane',
+    props: { bodyColumns: 40, scroll: { offset: 0, bodyRows: 40 } } as never,
+    requestId: 'mi-mesa',
+  })
+  await ui.press({ key: 'quitar-1' })
+  expect(disco.get(NOTAS_FILE)).toEqual('# Notas\n\n- llamar al banco\n')
+  await ui.unmount()
+})
+
+test('la equis no borra la de al lado si el fichero cambió por debajo', async ($, on) => {
+  const disco = ficheros(on, ROOT, MD, '# Notas\n\n- llamar al banco\n- firmar el anexo\n')
+  sinGit(on)
+  abre(on)
+  await $.command.run({ command: 'mi-mesa', args: '' } as never)
+  const ui = await $.ui.mount({
+    plugin: 'mi-mesa',
+    surface: 'terminal',
+    component: 'Pane',
+    props: { bodyColumns: 40, scroll: { offset: 0, bodyRows: 40 } } as never,
+    requestId: 'mi-mesa',
+  })
+  // Alguien edita NOTAS.md a mano y quita la primera: la nota número 0 ya es
+  // otra, y la equis que se pulsa es la que se pintó antes.
+  disco.set(NOTAS_FILE, '# Notas\n\n- firmar el anexo\n')
+  await ui.press({ key: 'quitar-0' })
+  // No se quita nada: el fichero se queda como lo dejó quien lo editó.
+  expect(disco.get(NOTAS_FILE)).toEqual('# Notas\n\n- firmar el anexo\n')
+  await ui.unmount()
 })

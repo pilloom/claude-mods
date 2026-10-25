@@ -6,8 +6,9 @@ pasaste a Claude Code**. Y un **sonido** cuando Claude acaba de contestar.
 
 ```
  NOTAS
-• Pedir las claves de staging a Marta
-El deploy del viernes no va
+× • Pedir las claves de staging a
+    Marta antes del jueves
+× • El deploy del viernes no va
  MI MESA · BACKEND_LANZADERA
 12 tickets · 5 hilos · generada 2026-10-08
 
@@ -66,21 +67,52 @@ es **exacto, no por prefijo**: `backend_lanzadera` es prefijo de
 ## El post-it
 
 **Las notas** salen de un `NOTAS.md` en la **raíz** del repositorio, no en
-`docs/`: es un fichero que escribes tú y que el repositorio **versiona**, para
-que la nota viaje con la rama, mientras la mesa se genera y no se sube. Se relee
-con el mismo trato que la mesa, cada 15 s y solo si cambió la fecha.
+`docs/`: es lo que tienes encima de la mesa en ese repositorio y se quiere ver
+al entrar, sin bajar a ninguna carpeta. Se relee con el mismo trato que la
+mesa, cada 15 s y solo si cambió la fecha.
+
+**El post-it es tuyo y no se sube.** Son las notas de una persona —como la
+mesa—, y lo que alguien apunta para sí mismo no tiene por qué viajar en una
+rama ni salir en un PR. El mod lo protege solo: al leerlo apunta `/NOTAS.md` en
+**`.git/info/exclude`**, los ignores del clon de quien lo usa. Ahí y no en el
+`.gitignore` del repositorio, que es un fichero del equipo y no hace falta
+meterle una línea a todo el mundo para esto; un `.gitignore` que ya lo ignore
+se respeta y no se duplica. En un worktree, un submódulo o una carpeta que no
+es un clon, simplemente no se apunta nada y el post-it sigue funcionando.
+
+⚠️ `exclude` **no desversiona** lo ya versionado: en un repositorio donde
+alguien commiteó `NOTAS.md` antes, el fichero sigue dentro y sus recordatorios
+salen en el siguiente PR. De ahí solo se sale a mano, así que el rótulo lo dice
+con la orden escrita —` NOTAS · SE SUBE A GIT: git rm --cached NOTAS.md `—
+hasta que se haga.
 
 La sección **solo existe cuando hay notas**: sin fichero, o con un fichero que
 no deja ninguna línea útil, no se pinta ni el rótulo y el panel sale como
 siempre. No hay formato que cumplir —no es la mesa—: se quitan las cabeceras,
 las rayas y las citas, las viñetas se unifican en una sola y las líneas en
-blanco se tiran. Caben cinco; de ahí para arriba el rótulo dice cuántas quedan
-(` NOTAS · +2 `) y el fichero se abre para verlas.
+blanco se tiran.
+
+**La nota se lee entera.** Una que no cabe en el ancho del panel se envuelve en
+las filas que necesite, cortando por los espacios y sangrando las siguientes
+bajo el texto, no bajo la viñeta —así se ve dónde empieza una y dónde sigue la
+de arriba—. Una palabra más larga que la fila (un enlace, una ruta) se parte por
+donde toque. Antes se recortaba a una fila con un `…`, y una nota de dos
+renglones —que es la nota normal— había que ir a leerla al fichero, que es justo
+lo que el panel ahorra.
+
+Caben **cinco notas**, y como mucho **media altura del cuerpo**: con notas
+largas el post-it se para ahí para no quedarse con el panel. La que no entra
+entera no se pinta a medias; el rótulo dice cuántas quedan (` NOTAS · +2 `) y el
+fichero se abre para verlas. Una nota sola más larga que ese tope se pinta
+igual: dejar el post-it en blanco teniendo algo escrito es peor.
 
 Es **un** post-it, no un tablero: la idea es la nota de encima de la mesa, lo
 que no quieres que se te pase esta semana. Para más de eso está la mesa.
 
 ## Poner y quitar notas
+
+Por tres sitios: pidiéndoselo al modelo, tecleando `/nota`, o con la equis del
+propio panel. Los tres pasan por el mismo código y escriben el mismo formato.
 
 Pidiéndolo, en cualquier repositorio y sin saberse nada:
 
@@ -100,6 +132,23 @@ Su descripción se lo dice al modelo con todas las letras: las notas van en
 Por eso **no hay que documentarle nada al equipo ni añadir líneas a ningún
 `CLAUDE.md`**: instalan el mod y la herramienta se explica sola.
 
+**Con el ratón**, cuando la nota ya no hace falta: cada una lleva su **`×`**
+delante. Al pulsarla se quita del fichero y del panel en el momento. Está
+apagada mientras no la apuntes y se enciende en rojo al pasar por encima de la
+nota —de la nota entera, no del glifo, que en un terminal es un blanco de un
+carácter—.
+
+La equis quita **la nota que señala**, por su sitio y no por su texto, así que
+dos notas iguales se distinguen sin problema; `quitar` por texto se sigue
+negando con dos candidatas, que ahí sí hay duda. Y si el fichero cambió desde
+que se pintó el panel —a mano, desde otra sesión—, la equis **no quita nada**:
+se relee y se enseña lo que hay, en vez de borrar la de al lado por un
+redibujado tarde.
+
+⚠️ Se quita **en un clic, sin preguntar**, y `NOTAS.md` no guarda historia. Es
+una nota de una línea y preguntar por cada una cansa más de lo que salva, pero
+conviene saberlo.
+
 Tecleando, cuando no quieres gastar un turno del modelo en tres palabras:
 
 ```
@@ -108,10 +157,10 @@ Tecleando, cuando no quieres gastar un turno del modelo en tres palabras:
 /nota                                  # lista las que hay
 ```
 
-Las dos entradas pasan por el mismo código y escriben el mismo formato, así que
-no acaban siendo dos post-its distintos según por dónde entres. Y las dos
-releen el fichero al escribir: la nota aparece en el panel en el momento, sin
-esperar el ciclo de 15 s.
+Las entradas pasan por el mismo código y escriben el mismo formato, así que no
+acaban siendo dos post-its distintos según por dónde entres. Y todas relean el
+fichero al escribir: el panel se entera en el momento, sin esperar el ciclo de
+15 s.
 
 **Quitar exige que no haya duda.** Se busca sin tildes ni mayúsculas, como se
 busca a mano, y si el texto casa con dos notas —o con ninguna— no se toca el
@@ -140,8 +189,10 @@ desinstalar nada.
 
 ## El reparto de la pantalla
 
-El post-it se queda las filas que necesite —una por nota, más la del rótulo— y
-lo que sobra se reparte **tres cuartos para la mesa y uno para los mensajes**.
+El post-it se queda las filas que necesite —las que ocupen las notas ya
+envueltas al ancho menos la equis, más la del rótulo, y como mucho media altura
+del cuerpo— y lo que
+sobra se reparte **tres cuartos para la mesa y uno para los mensajes**.
 Sin notas no ocupa nada. El alto lo da
 `e.props.scroll.bodyRows`, que es el del cuerpo del propio panel; el del
 viewport es el de la pantalla entera y además no redibuja al cambiar, así que no

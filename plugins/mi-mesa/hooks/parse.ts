@@ -119,8 +119,8 @@ const VINETA = /^\s*(?:[-*+•]|\d+[.)])\s+/u
 /**
  * Lee NOTAS.md como un post-it: las líneas que hay, en su orden y sin adornos.
  *
- * Es un fichero que escribes a mano y que el repositorio versiona, así que no
- * tiene formato pactado como la mesa: aquí no se busca ninguna estructura, solo
+ * Es un fichero que escribes a mano y que no sale del clon, así que no tiene
+ * formato pactado como la mesa: aquí no se busca ninguna estructura, solo
  * se quitan las cabeceras, las rayas y las citas —el rótulo del panel ya dice
  * que son notas—, se unifican las viñetas en una sola y se tiran las líneas en
  * blanco, que en tres filas de panel no se pagan.
@@ -136,6 +136,65 @@ export function parseNotas(text: string, mtimeMs: number): Notas {
     lines.push(line.replace(VINETA, '• '))
   }
   return { lines, mtimeMs }
+}
+
+/**
+ * Parte una nota en las filas que ocupa a ese ancho, sin cortar palabras.
+ *
+ * El post-it enseña la nota **entera**: antes se recortaba a una fila con un
+ * `…` al final, y una nota de dos renglones —que es la nota normal— había que
+ * ir a leerla al fichero, que es justo lo que el panel viene a ahorrar. Una
+ * nota corta sigue siendo una fila y no cambia nada.
+ *
+ * Las filas siguientes van sangradas bajo el texto y no bajo la viñeta: así se
+ * ve de un vistazo dónde empieza cada nota y dónde continúa la de arriba. Una
+ * palabra más larga que la fila —un enlace, una ruta— se parte por donde toque,
+ * porque la alternativa es dejar la fila en blanco y salirse igual.
+ *
+ * El ancho se cuenta en caracteres, como el recorte de la mesa: un emoji ocupa
+ * dos columnas en el terminal y aquí cuenta uno, así que una nota con emojis se
+ * queda algo corta. Eso es preferible a pasarse de ancho y envolver dos veces.
+ */
+export function envolver(linea: string, width: number): string[] {
+  const ancho = Math.max(10, width)
+  // La viñeta sale del texto y pasa a ser el margen de la primera fila. Si se
+  // deja dentro, el espacio que lleva detrás es el último hueco de la fila
+  // para una nota que empieza por una palabra larga —un enlace— y la primera
+  // fila sale con la viñeta sola.
+  const vineta = linea.startsWith('• ') ? '• ' : ''
+  const sangria = vineta ? '  ' : ''
+  const filas: string[] = []
+  let resto = linea.slice(vineta.length)
+  while (resto.length > 0) {
+    const prefijo = filas.length === 0 ? vineta : sangria
+    const hueco = ancho - prefijo.length
+    if (resto.length <= hueco) {
+      filas.push(prefijo + resto)
+      break
+    }
+    const espacio = resto.lastIndexOf(' ', hueco)
+    const corte = espacio > 0 ? espacio : hueco
+    filas.push((prefijo + resto.slice(0, corte)).trimEnd())
+    resto = resto.slice(corte).trimStart()
+  }
+  return filas.length > 0 ? filas : [linea]
+}
+
+/**
+ * Dónde está en el fichero cada nota que el post-it pinta, en el mismo orden.
+ *
+ * Es el filtro de `parseNotas` visto por el otro lado: las líneas que el panel
+ * enseña son estas, así que la nota número `n` del panel es la de `pos[n]`. De
+ * ahí sale el poder quitarla por su número y no buscándola por el texto.
+ */
+function posiciones(lines: string[]): number[] {
+  const pos: number[] = []
+  for (let i = 0; i < lines.length; i++) {
+    const line = (lines[i] ?? '').trim()
+    if (!line || ADORNO.test(line)) continue
+    pos.push(i)
+  }
+  return pos
 }
 
 /** El mismo texto sin tildes ni mayúsculas, para buscar como se busca a mano. */
@@ -181,12 +240,7 @@ export type Quitada = {
 export function quitarNota(text: string, patron: string): Quitada {
   const aguja = plano(patron.trim())
   const lines = text.split('\n')
-  const indices: number[] = []
-  for (let i = 0; i < lines.length; i++) {
-    const line = (lines[i] ?? '').trim()
-    if (!line || ADORNO.test(line)) continue
-    if (aguja && plano(line).includes(aguja)) indices.push(i)
-  }
+  const indices = posiciones(lines).filter(i => aguja && plano(lines[i] ?? '').includes(aguja))
   const candidatas = indices.map(i => (lines[i] ?? '').trim().replace(VINETA, ''))
   const unica = indices.length === 1 ? indices[0] : undefined
   if (unica === undefined) return { texto: text, candidatas }
@@ -194,5 +248,32 @@ export function quitarNota(text: string, patron: string): Quitada {
     texto: lines.filter((_, j) => j !== unica).join('\n'),
     quitada: candidatas[0],
     candidatas,
+  }
+}
+
+/**
+ * Quita la nota que hace el número `n` del post-it, contando desde arriba.
+ *
+ * Es lo que pulsa la equis del panel, y por eso no busca ni pregunta: ahí no
+ * hay duda que resolver, se está señalando una nota concreta con el dedo. Dos
+ * notas iguales —que `quitarNota` se niega a tocar, y con razón— aquí se
+ * quitan sin problema, porque se sabe cuál de las dos.
+ *
+ * `esperada` es lo que el panel tenía pintado en ese sitio. Si el fichero
+ * cambió por debajo —a mano, desde otra sesión, desde otra rama— la nota
+ * número `n` ya no es la misma y no se quita nada: el panel se relee y enseña
+ * lo que hay. Borrar la de al lado por un redibujado tarde es justo lo que no
+ * puede pasar.
+ */
+export function quitarNotaN(text: string, n: number, esperada: string): Quitada {
+  const lines = text.split('\n')
+  const pos = posiciones(lines)[n]
+  if (pos === undefined) return { texto: text, candidatas: [] }
+  const actual = (lines[pos] ?? '').trim().replace(VINETA, '')
+  if (actual !== esperada.trim().replace(VINETA, '')) return { texto: text, candidatas: [] }
+  return {
+    texto: lines.filter((_, j) => j !== pos).join('\n'),
+    quitada: actual,
+    candidatas: [actual],
   }
 }

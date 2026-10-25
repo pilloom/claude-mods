@@ -2,18 +2,37 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
 import type { Mesa, Notas, Prompt } from '../types'
-import { anadirNota, parseHistory, parseMesa, parseNotas, quitarNota } from './parse'
+import {
+  anadirNota,
+  envolver,
+  parseHistory,
+  parseMesa,
+  parseNotas,
+  quitarNota,
+  quitarNotaN,
+} from './parse'
 
 const PANE = 'mi-mesa'
 const MESA_FILE = 'docs/MI-MESA.md'
 /**
- * El post-it, en la raíz y no en `docs/`: es un fichero que el repositorio
- * versiona a propósito, para que la nota viaje con la rama, mientras la mesa
- * se genera y no se sube.
+ * El post-it, en la raíz y no en `docs/`: es lo que tienes encima de la mesa
+ * en ese repositorio, y se quiere verlo al entrar sin bajar a ninguna carpeta.
+ *
+ * No lo versiona el repositorio: son las notas de una persona, como la mesa, y
+ * lo que alguien apunta para sí mismo no viaja en una rama ni sale en un PR.
+ * El mod lo apunta solo en `.git/info/exclude`, que es el sitio de los ignores
+ * de quien tiene el clon: así protege también los repositorios de los demás
+ * sin pedirle a nadie que commitee una línea en el `.gitignore` de todos.
  */
 const NOTAS_FILE = 'NOTAS.md'
-/** Cuántas líneas del post-it caben antes de que se diga cuántas quedan. */
+/** Los ignores de este clon, que no se commitean: ahí va el post-it. */
+const EXCLUDE_FILE = '.git/info/exclude'
+/** Con la barra delante, el de la raíz y no un NOTAS.md de cualquier carpeta. */
+const EXCLUDE_LINEA = '/NOTAS.md'
+/** Cuántas notas se pintan como mucho antes de que se diga cuántas quedan. */
 const NOTAS_MAX = 5
+/** Lo que la equis de quitar le come a cada nota: el glifo y su espacio. */
+const MARGEN = 2
 /** El clip que suena al acabar el turno; es un fichero del propio mod. */
 const SONIDO = 'sounds/listo.wav'
 /** La herramienta del mod, como la nombra el motor y la llama el modelo. */
@@ -74,9 +93,71 @@ async function refreshNotas($: EngineInterface): Promise<void> {
     const prev = await read($, notas)
     if (mtimeMs === prev.mtimeMs) return
     const text = await $.fs.read(file)
-    await update($, notas, () => parseNotas(text, mtimeMs))
+    // Las dos comprobaciones de git cuelgan de aquí y no del ciclo: con el
+    // `mtime` igual se ha vuelto ya, así que solo corren cuando el post-it
+    // cambia, y no cada 15 s por un fichero que nadie ha tocado.
+    await ignorar($, root)
+    const versionado = await enGit($, root)
+    await update($, notas, () => ({ ...parseNotas(text, mtimeMs), enGit: versionado }))
   } catch {
     // Un post-it ilegible no tira el panel: se queda con lo que ya tenía.
+  }
+}
+
+/**
+ * Apunta el post-it en los ignores de este clon, si no lo está ya.
+ *
+ * En `.git/info/exclude` y no en el `.gitignore` del repositorio: el fichero
+ * es personal, y un mod no tiene por qué meter una línea en algo que los demás
+ * se van a encontrar en el diff. Un `.gitignore` que ya lo ignore —el de este
+ * mismo repositorio, el que alguien puso a mano— se respeta y no se duplica.
+ *
+ * Lo que falle aquí se traga: un `.git` que es un fichero (un worktree, un
+ * submódulo), una carpeta sin permiso o un sitio que no es un repositorio
+ * dejan el post-it funcionando igual, solo que sin proteger.
+ */
+async function ignorar($: EngineInterface, root: string): Promise<void> {
+  const dicho = (texto: string) =>
+    texto.split('\n').some(l => l.trim() === EXCLUDE_LINEA || l.trim() === NOTAS_FILE)
+  try {
+    if (!(await $.fs.exists(`${root}/.git/info`))) return
+    const gitignore = `${root}/.gitignore`
+    if ((await $.fs.exists(gitignore)) && dicho(await $.fs.read(gitignore))) return
+    const file = `${root}/${EXCLUDE_FILE}`
+    const antes = (await $.fs.exists(file)) ? await $.fs.read(file) : ''
+    if (dicho(antes)) return
+    const salto = antes === '' || antes.endsWith('\n') ? '' : '\n'
+    await $.fs.write(
+      file,
+      `${antes}${salto}# El post-it de «Mi mesa»: notas de quien usa este clon.\n${EXCLUDE_LINEA}\n`,
+    )
+  } catch {
+    // Sin poder apuntarlo, el post-it sigue; lo que no hay es la protección.
+  }
+}
+
+/**
+ * Si el repositorio ya versiona el post-it, que es de lo que hay que avisar.
+ *
+ * `exclude` no desversiona nada: en un repositorio donde alguien lo commiteó
+ * antes, el fichero sigue dentro y los recordatorios de esa persona salen en
+ * el siguiente PR. De ahí solo se sale a mano, con `git rm --cached`, así que
+ * el panel lo dice en el rótulo hasta que se haga.
+ */
+async function enGit($: EngineInterface, root: string): Promise<boolean> {
+  try {
+    const { exitCode } = await $.process.run([
+      'git',
+      '-C',
+      root,
+      'ls-files',
+      '--error-unmatch',
+      NOTAS_FILE,
+    ])
+    return exitCode === 0
+  } catch {
+    // Sin git, o fuera de un repositorio, no hay nada de lo que avisar.
+    return false
   }
 }
 
@@ -136,6 +217,26 @@ async function nota(
   await $.fs.write(file, despues)
   await refreshNotas($)
   return `Quitada de ${NOTAS_FILE}: ${quitada}`
+}
+
+/**
+ * Quita la nota número `n` del post-it: lo que hace la equis del panel.
+ *
+ * No pasa por `nota($, 'quitar', …)` porque esa busca por el texto y se niega
+ * cuando hay duda, que es lo correcto cuando te lo dictan y lo que no tiene
+ * sentido aquí: la equis señala una nota con el dedo, y dos notas iguales se
+ * distinguen por su sitio. `esperada` es lo que estaba pintado en ese sitio,
+ * para no borrar la de al lado si el fichero cambió desde el último redibujado.
+ *
+ * No devuelve nada: quien lo llama es un botón, no alguien esperando una
+ * frase. Lo que pasó se ve en el panel, que se relee al momento, y si no se
+ * quitó nada se relee igual y lo que sale es lo que hay de verdad.
+ */
+async function quitarPorNumero($: EngineInterface, n: number, esperada: string): Promise<void> {
+  const file = await notasFile($)
+  const { texto, quitada } = quitarNotaN(await leerNotas($, file), n, esperada)
+  if (quitada !== undefined) await $.fs.write(file, texto)
+  await refreshNotas($)
 }
 
 /**
@@ -267,11 +368,17 @@ export const register: Register = (on, options) => {
    * `accion` viene validada por el esquema, pero el valor llega como lo mande
    * el modelo, así que se comprueba aquí: lo que no sea de los tres se trata
    * como `listar`, que es la operación que no escribe nada.
+   *
+   * El `result` es la frase pelada, no un `{ content: [...] }`: una herramienta
+   * registrada por un mod no declara esquema de salida, y el que el núcleo le
+   * pone por defecto admite `string`, lista de bloques o nada. Con el objeto,
+   * la nota se escribía y la llamada contestaba error —`invalid_union`—, que es
+   * el peor de los fallos posibles aquí: quien lo lee da por hecho que no se
+   * guardó, repite la llamada y acaba con la nota duplicada.
    */
   on('tool.call', { tool: HERRAMIENTA }, async ($, e) => {
     const accion = e.accion === 'anadir' || e.accion === 'quitar' ? e.accion : 'listar'
-    const text = await nota($, accion, e.texto ?? '')
-    return { result: { content: [{ type: 'text', text }] } }
+    return { result: await nota($, accion, e.texto ?? '') }
   })
 
   on('command.run', { command: 'nota' }, async ($, e) => {
@@ -304,7 +411,7 @@ export const register: Register = (on, options) => {
   })
 
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
-    const { Box, Text } = $.ui.resolve(e)
+    const { Box, Button, Text } = $.ui.resolve(e)
     const m = await read($, mesa)
     const ultimos = await read($, prompts)
     const post = await read($, notas)
@@ -324,9 +431,27 @@ export const register: Register = (on, options) => {
     // rótulo— y el resto se reparte como antes. Lo que no cabe no se recorta a
     // la mitad: se dice cuántas notas quedan sin pintar, y el fichero se abre
     // para verlas. Sin notas no ocupa nada y el panel sale como siempre.
-    const pintadas = post.lines.slice(0, NOTAS_MAX)
+    // Cada nota ocupa las filas que necesite: se envuelve al ancho del panel en
+    // lugar de recortarse. Una nota a medias —«pedir las claves de stagi…»—
+    // obliga a abrir el fichero para leer lo que uno mismo dictó, que es justo
+    // lo que el post-it viene a ahorrar.
+    const envueltas = post.lines.slice(0, NOTAS_MAX).map(l => envolver(l, width - MARGEN))
+    // Pero el post-it no se queda con el panel: con notas largas se para a la
+    // mitad del cuerpo, y la nota que no entra entera no se pinta a medias,
+    // se cuenta en el rótulo. Sin filas conocidas —un test, una superficie que
+    // no manda las props— no hay tope y manda el número de notas.
+    const techo = rows > 0 ? Math.max(1, Math.floor(rows / 2) - 1) : Infinity
+    const pintadas: string[][] = []
+    let alto = 0
+    for (const nota of envueltas) {
+      // La primera entra aunque pase del tope: una nota sola que no cupiera
+      // dejaría el post-it en blanco teniendo algo escrito.
+      if (pintadas.length > 0 && alto + nota.length > techo) break
+      pintadas.push(nota)
+      alto += nota.length
+    }
     const restan = post.lines.length - pintadas.length
-    const altoNotas = pintadas.length > 0 ? pintadas.length + 1 : 0
+    const altoNotas = alto > 0 ? Math.min(alto, techo) + 1 : 0
     // Lo que queda para la mesa y los mensajes, ya sin el post-it.
     const libres = Math.max(0, rows - altoNotas)
     const parte = rows >= 12 && libres >= 10
@@ -338,6 +463,11 @@ export const register: Register = (on, options) => {
     return (
       <Box flexDirection="column">
         {/* El post-it, y solo cuando hay algo escrito.
+            El rótulo dice en su sitio si el repositorio está versionando el
+            fichero, que es el único aviso que llega a tiempo: el mod lo apunta
+            en `.git/info/exclude` al leerlo, pero eso no saca de git lo que
+            alguien commiteó antes, y lo que hay dentro son notas de una
+            persona. Lleva la orden escrita para no tener que ir a buscarla.
             El rótulo es negro sobre amarillo, los dos colores dichos, y no
             `inverse` sobre amarillo: `inverse` pinta el texto del color del
             FONDO del tema, que en un tema claro es blanco, y blanco sobre
@@ -351,12 +481,37 @@ export const register: Register = (on, options) => {
         {altoNotas > 0 ? (
           <Box flexDirection="column" height={altoNotas} overflow="hidden" flexShrink={0}>
             <Text bold color="black" backgroundColor="yellow">
-              {` NOTAS${restan > 0 ? ` · +${restan}` : ''} `.padEnd(width)}
+              {` NOTAS${restan > 0 ? ` · +${restan}` : ''}${post.enGit ? ' · SE SUBE A GIT: git rm --cached NOTAS.md' : ''} `.padEnd(
+                width,
+              )}
             </Text>
-            {pintadas.map((l, i) => (
-              <Text key={`nota-${i}`} bold color="warning">
-                {cut(l, width)}
-              </Text>
+            {pintadas.map((nota, i) => (
+              // La fila entera es el ámbito del hover: la equis se enciende
+              // apuntando a cualquier parte de la nota y no solo al glifo, que
+              // en un terminal es un blanco de un carácter.
+              <Box key={`nota-${i}`} flexDirection="row">
+                <Button
+                  key={`quitar-${i}`}
+                  plain
+                  dimColor
+                  label="×"
+                  hover={{ color: 'red', bold: true }}
+                  onPress={() => {
+                    // Sin `await` y con el fallo tragado: lo que se dibuja no
+                    // espera a un botón, y un post-it que no se deja escribir
+                    // no puede tirar el panel. El ciclo de 15 s lo recupera.
+                    void quitarPorNumero($, i, post.lines[i] ?? '').catch(() => {})
+                  }}
+                />
+                <Text> </Text>
+                <Box flexDirection="column">
+                  {nota.map((l, j) => (
+                    <Text key={`fila-${j}`} bold color="warning">
+                      {l}
+                    </Text>
+                  ))}
+                </Box>
+              </Box>
             ))}
           </Box>
         ) : null}
