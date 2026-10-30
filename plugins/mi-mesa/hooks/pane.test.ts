@@ -719,3 +719,56 @@ test('un diálogo que no se contesta tampoco corre nada', async ($, on) => {
   expect(await ui.find({ type: 'Button', key: 'regenerar' })).toBeDefined()
   await ui.unmount()
 })
+
+test('la ↻ va dentro de la barra del título, pegada a su borde derecho', async ($, on) => {
+  const disco = ficheros(on, ROOT, MD)
+  disco.set(GUION, '// el guion de este repo')
+  abre(on)
+  await $.command.run({ command: 'mi-mesa', args: '' } as never)
+  const ui = await $.ui.mount({ plugin: 'mi-mesa', surface: 'terminal', component: 'Pane', requestId: 'mi-mesa', props: {} as never })
+  const barra = await ui.find({ type: 'Text', text: /^ MI MESA · BACKEND_LANZADERA +$/ })
+  const boton = await ui.find({ type: 'Button', key: 'regenerar' })
+  // La barra deja justo el hueco del glifo y sus dos espacios: las dos piezas
+  // suman el ancho de la fila. Rellenándola a ancho completo, el botón se sale.
+  expect(barra?.text.length).toEqual(53)
+  expect(boton?.text).toEqual(' ↻ ')
+  // `plain`: sin él el terminal le dibuja sus corchetes, y dentro de la barra
+  // eso es un botón pegado encima del título en vez de parte de él.
+  expect(boton?.props.plain).toEqual(true)
+  // Y el glifo lleva el fondo de la barra, no el del panel: por eso va como
+  // `Text` hijo y no como `label`, que un `Button` no tiene `inverse` propio.
+  expect(JSON.stringify(boton?.children)).toContain('"inverse":true')
+  await ui.unmount()
+})
+
+test('sin botón la barra del título vuelve a ser de ancho completo', async ($, on) => {
+  // Sin guion no hay hueco que dejarle: el título se queda la fila entera.
+  ficheros(on, ROOT, MD)
+  sinGit(on)
+  abre(on)
+  await $.command.run({ command: 'mi-mesa', args: '' } as never)
+  const ui = await $.ui.mount({ plugin: 'mi-mesa', surface: 'terminal', component: 'Pane', requestId: 'mi-mesa', props: {} as never })
+  const barra = await ui.find({ type: 'Text', text: /^ MI MESA · BACKEND_LANZADERA +$/ })
+  expect(barra?.text.length).toEqual(56)
+  await ui.unmount()
+})
+
+test('mientras corre, el aviso entra en la barra y se queda con el hueco', async ($, on) => {
+  const disco = ficheros(on, ROOT, MD)
+  disco.set(GUION, '// el guion de este repo')
+  abre(on)
+  // Un `process.run` que no vuelve deja el panel en mitad de la regeneración,
+  // que es el estado que no se puede ver de otra manera.
+  on('process.run', async (_, e) => {
+    if (e.argv[0] === 'node') await new Promise(() => {})
+    return { value: { exitCode: 1, stdout: '', stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
+  })
+  contesta(on, 'Regenerar')
+  await $.command.run({ command: 'mi-mesa', args: '' } as never)
+  const ui = await $.ui.mount({ plugin: 'mi-mesa', surface: 'terminal', component: 'Pane', requestId: 'mi-mesa', props: {} as never })
+  await ui.press({ key: 'regenerar' })
+  expect(await ui.find({ type: 'Text', text: /REGENERANDO…/ })).toBeDefined()
+  // Y no se deja pulsar otra vez: el aviso ocupa el sitio del botón.
+  expect(await ui.find({ type: 'Button', key: 'regenerar' })).toBeUndefined()
+  await ui.unmount()
+})

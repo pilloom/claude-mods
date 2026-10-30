@@ -4,9 +4,16 @@
 
 ### Una `↻` para regenerar la mesa
 
-- El panel pinta un botón al lado de la fecha de generación que corre el guion
-  de la mesa de ese repositorio y la relee al momento. Mientras corre, la línea
-  dice `· regenerando…` y el botón no está: dos clics no lanzan dos guiones.
+- El panel pinta un botón en la barra del título, pegado a su borde derecho,
+  que corre el guion de la mesa de ese repositorio y la relee al momento. Va
+  ahí y no en la línea de la fecha —donde estuvo primero— porque dentro de la
+  barra sale en negritas y sobre su fondo, y se encuentra sin buscarlo; abajo
+  quedaba en gris apagado entre dos cifras. El glifo va como hijo `Text` del
+  botón y no como su `label`, que es la única manera de que lleve el fondo de
+  la barra en vez de abrir un hueco del color del panel, y va `plain`, sin los
+  corchetes que el terminal le dibuja por su cuenta. Mientras corre, el aviso
+  entra en la propia barra y se queda con el sitio del botón: dos clics no
+  lanzan dos guiones.
   Un guion que falla deja su primera línea de error debajo, en rojo, y la mesa
   de antes puesta: lo que falló es la generación, no la lectura.
 - **No hay que configurar el comando.** El fichero generado se autodeclara en

@@ -573,6 +573,13 @@ export const register: Register = (on, options) => {
     // —un test que monta sin props, una superficie que no lo manda— no se parte
     // nada: las dos secciones van seguidas y el tercio de abajo no desaparece.
     const rows = e.props?.scroll?.bodyRows ?? 0
+    const titulo = ` MI MESA · ${(m.repo || 'sin repo').toUpperCase()} `
+    /**
+     * Lo que la `↻` le quita a la barra del título: el glifo y sus dos
+     * espacios. Cero cuando no hay botón —sin guion, o con el guion
+     * corriendo—, y entonces la barra vuelve a ser de ancho completo.
+     */
+    const hueco = reg.fase === 'quieto' && reg.guion !== undefined ? 3 : 0
     // El post-it se queda las filas que necesite —una por nota, más la del
     // rótulo— y el resto se reparte como antes. Lo que no cabe no se recorta a
     // la mitad: se dice cuántas notas quedan sin pintar, y el fichero se abre
@@ -662,34 +669,40 @@ export const register: Register = (on, options) => {
           </Box>
         ) : null}
         <Box flexDirection="column" height={arriba} overflow="hidden" flexShrink={0}>
-          {/* Barra de ancho completo: `inverse` pinta el fondo del color y el
-              texto del fondo, así que el rótulo se lee como un título y no
-              como una línea más de las muchas que lleva el panel. */}
-          <Text bold inverse color="cyan">
-            {` MI MESA · ${(m.repo || 'sin repo').toUpperCase()} `.padEnd(width)}
-          </Text>
-          {/* La fecha de generación y, pegado a ella, el botón que la cambia:
-              es el sitio que lo explica sin rótulo, y no la barra del título,
-              donde la `inverse` de ancho completo no llega hasta el glifo y
-              deja el botón flotando sobre el fondo del panel.
-              Mientras corre no hay botón, hay texto: un control que se deja
-              pulsar y no hace nada se pulsa tres veces, y el guion tarda. */}
-          {/* La fila lleva clave porque es el ámbito del hover, como la de
-              cada nota: la `↻` se enciende apuntando a cualquier parte de la
-              línea de la fecha y no solo al glifo, que en un terminal es un
-              blanco de un carácter. */}
-          <Box key="cabecera" flexDirection="row">
-            <Text dimColor>
-              {`${total} tickets · ${m.hilos.length} hilos · generada ${m.generated}`}
+          {/* La barra del título, de ancho completo, y la `↻` pegada a su
+              borde derecho: `inverse` pinta el fondo del color y el texto del
+              fondo, así que el rótulo se lee como un título y el botón, dentro
+              de él, sale en negritas y se encuentra sin buscarlo. En la línea
+              de la fecha —donde estuvo primero— quedaba en gris apagado entre
+              dos cifras, que es justo donde no se ve.
+              El glifo va como `Text` hijo del `Button` y no como su `label`:
+              un `Button` no tiene `inverse` ni `color` propios, y sus hijos de
+              texto se dibujan en su lugar, así que es la única manera de que
+              el botón lleve el mismo fondo que la barra en vez de abrir un
+              hueco del color del panel. El `label` se queda nombrándolo, que
+              es lo que lee quien no ve el glifo.
+              `plain` es lo que lo deja sin adornos: sin él, el terminal le
+              dibuja sus corchetes —`[ ↻ ]`— y dentro de la barra eso es un
+              botón pegado encima del título en vez de parte de él.
+              La fila lleva clave porque es el ámbito del hover, como la de
+              cada nota: la `↻` se enciende apuntando a cualquier parte del
+              título y no solo al glifo, que en un terminal es un blanco de un
+              carácter.
+              Mientras corre no hay botón: el aviso entra en la propia barra y
+              se queda con su sitio. Un control que se deja pulsar y no hace
+              nada se pulsa tres veces, y el guion tarda. */}
+          <Box key="titulo" flexDirection="row">
+            <Text bold inverse color="cyan">
+              {`${titulo}${reg.fase === 'corriendo' ? '· REGENERANDO… ' : ''}`.padEnd(
+                Math.max(0, width - hueco),
+              )}
             </Text>
-            {reg.fase === 'corriendo' ? <Text color="cyan">{' · regenerando…'}</Text> : null}
-            {reg.fase === 'quieto' && reg.guion !== undefined ? (
+            {hueco > 0 ? (
               <Button
                 key="regenerar"
                 plain
-                dimColor
-                label=" ↻"
-                hover={{ color: 'cyan', bold: true }}
+                label="Regenerar la mesa"
+                hover={{ color: 'yellow' }}
                 onPress={() => {
                   // Sin `await` y con el fallo tragado, como la equis del
                   // post-it: lo que se dibuja no espera a un botón, y un guion
@@ -697,9 +710,16 @@ export const register: Register = (on, options) => {
                   // la línea de abajo.
                   void regenerar($).catch(() => {})
                 }}
-              />
+              >
+                <Text bold inverse color="cyan">
+                  {' ↻ '}
+                </Text>
+              </Button>
             ) : null}
           </Box>
+          <Text dimColor>
+            {`${total} tickets · ${m.hilos.length} hilos · generada ${m.generated}`}
+          </Text>
           {m.error ? <Text color="red">{cut(m.error, width)}</Text> : null}
           {reg.error ? <Text color="red">{cut(reg.error, width)}</Text> : null}
           {m.hilos.map(hilo => (

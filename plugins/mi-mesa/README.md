@@ -68,8 +68,23 @@ es **exacto, no por prefijo**: `backend_lanzadera` es prefijo de
 ## Regenerar la mesa
 
 El fichero lo escribe el guion de cada repositorio, y el panel pinta una **`↻`**
-al lado de la fecha de generación para correrlo sin salir de la sesión. Antes de
-ejecutar nada **pregunta**, con el comando entero delante:
+en la barra del título, pegada a su borde derecho, para correrlo sin salir de la
+sesión:
+
+```
+ MI MESA · BACKEND_LANZADERA                        ↻
+2 tickets · 2 hilos · generada 2026-10-29
+```
+
+Va ahí y no en la línea de la fecha —donde estuvo primero— porque dentro de la
+barra sale **en negritas y sobre su fondo**, y se encuentra sin buscarlo; en la
+línea de abajo quedaba en gris apagado entre dos cifras. El glifo lleva el fondo
+de la barra porque va como hijo `Text` del botón y no como su `label`: un
+`Button` no tiene `inverse` ni `color` propios. Y va `plain`, sin los corchetes
+que el terminal le dibuja por su cuenta, que dentro de la barra se ven como un
+botón pegado encima del título en vez de parte de él.
+
+Antes de ejecutar nada **pregunta**, con el comando entero delante:
 
 ```
 ¿Regenerar la mesa con «node scripts/qa/listar-mi-mesa.js»?
@@ -81,9 +96,10 @@ escape dejan todo como estaba. Y en un `-p`, donde no hay nadie a quien
 preguntar, no corre: eso es lo que se quiere antes de ejecutar algo que nadie va
 a ver.
 
-Mientras corre, la línea dice `· regenerando…` y el botón no está: un control
-que se deja pulsar y no hace nada se pulsa tres veces. Al acabar, la mesa se
-relee en el momento. Si el guion falla, su primera línea de error sale debajo en
+Mientras corre, el aviso entra en la propia barra —` MI MESA · BACKEND_LANZADERA
+· REGENERANDO… `— y se queda con el sitio del botón: un control que se deja
+pulsar y no hace nada se pulsa tres veces. Al acabar, la mesa se relee en el
+momento. Si el guion falla, su primera línea de error sale debajo en
 rojo y la mesa de antes se queda puesta: lo que falló es la generación, no la
 lectura.
 
@@ -279,7 +295,7 @@ las dos se verían apagadas**: están en un solo sitio cada una, al final de
 
 ```bash
 claude plugin validate .            # manifiesto y módulo, como los lee el motor
-claude plugin test .                # 53 tests
+claude plugin test .                # 56 tests
 ```
 
 Para los tipos hace falta que el motor haya cargado el mod alguna vez desde su
