@@ -14,6 +14,40 @@ export type Mesa = {
   hilos: Hilo[]
   mtimeMs: number
   error?: string
+  /**
+   * El guion que escribió el fichero, como su cabecera lo nombra: la ruta
+   * relativa del `listar-mi-mesa` de ese repositorio. Solo lo trae la mesa
+   * cuya cabecera lo diga, y de ahí sale el comando del botón de regenerar.
+   */
+  generador?: string
+}
+
+/**
+ * Lo que el botón de regenerar la mesa necesita saber entre dibujados.
+ *
+ * Va en su propio atom y no dentro de `Mesa` porque `refresh` reemplaza esa
+ * entera cada vez que el fichero cambia, y lo que hay aquí tiene que
+ * sobrevivir justo a eso: al redibujado de después de regenerar.
+ */
+export type Regen = {
+  /**
+   * En qué está: `quieto` es el botón puesto, `preguntando` es la confirmación
+   * abierta y `corriendo`, el guion en marcha.
+   *
+   * Un solo campo y no dos banderas: las tres fases se excluyen, y con
+   * `preguntando` y `corriendo` por separado existiría el estado imposible de
+   * estar en las dos. Mientras no esté `quieto` no se lanza nada más: dos
+   * pulsaciones no abren dos diálogos ni corren dos guiones.
+   */
+  fase: 'quieto' | 'preguntando' | 'corriendo'
+  /**
+   * La ruta relativa del guion que se ejecutaría, ya resuelta y comprobada en
+   * disco. Sin ella no hay botón: un repositorio sin guion no gana un control
+   * que no puede hacer nada.
+   */
+  guion?: string
+  /** Lo que falló la última vez, para decirlo donde se dice el de la mesa. */
+  error?: string
 }
 
 /** Un mensaje que escribiste tú, tal como lo guarda ~/.claude/history.jsonl. */
@@ -51,7 +85,7 @@ export type NotaInput = {
 
 declare module 'claude-code' {
   interface PluginState {
-    'mi-mesa': { mesa: Mesa; prompts: Prompt[]; notas: Notas }
+    'mi-mesa': { mesa: Mesa; prompts: Prompt[]; notas: Notas; regen: Regen }
   }
   /**
    * La herramienta que el mod registra en marcha, declarada aquí porque los

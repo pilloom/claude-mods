@@ -1,3 +1,19 @@
 {
-  "extends": "./.claude-plugin/types/tsconfig.json"
+  // Los tipos de la build, que escribe el motor al cargar el mod desde su
+  // carpeta. `claude-code-mcp` se queda fuera a propósito: es el d.ts con los
+  // esquemas de **todas** las herramientas MCP que hubiera conectadas en esa
+  // sesión, y en una máquina con varios servidores (aquí: 300 y pico
+  // herramientas) la unión de `tool.call` se come el tope de instanciaciones
+  // de `tsc` y lo que sale es un `TS2589` en el primer `$.tool.call` o en el
+  // primer `on('tool.call', …)` del programa, que no habla de nada de esto.
+  // Con esta línea el chequeo baja de 10,3 M de instanciaciones a 0,3 M.
+  //
+  // No se pierde nada de lo que este mod usa: su propia herramienta la declara
+  // `types/index.d.ts` con una ampliación de `McpToolInputs` —por eso está
+  // ahí—, y el mod no llama a las de otros servidores. El día que llame a una,
+  // se añade aquí otra vez y se paga el chequeo lento.
+  "extends": "./.claude-plugin/types/tsconfig.json",
+  "compilerOptions": {
+    "types": ["claude-code", "claude-code-tools"]
+  }
 }

@@ -22,6 +22,23 @@ const MD = [
 const ROOT = '/x/RBSistemas/lanzadera/backend_lanzadera'
 
 /**
+ * El `mtime` de cada fichero del disco en memoria, que sube en cada escritura.
+ *
+ * Es del módulo y no del `ficheros` de cada test —que lo vacía al empezar—
+ * porque hay un fichero que no escribe el mod: la mesa que reescribe el guion
+ * de regenerar. `pon` es la única manera de cambiarla de forma que el panel la
+ * relea, porque `$.fs.write` desde un hook del test lo rechaza el motor: solo
+ * lo llama quien lo tiene en su módulo de hooks.
+ */
+const versiones = new Map<string, number>()
+
+/** Escribe un fichero del disco en memoria como lo haría algo de fuera del mod. */
+function pon(disco: Map<string, string>, path: string, text: string): void {
+  disco.set(path, text)
+  versiones.set(path, (versiones.get(path) ?? 1) + 1)
+}
+
+/**
  * Un disco en memoria con los ficheros que el panel lee y escribe.
  *
  * Cada ruta se contesta por separado: con un `fs.exists` que dice `true` a
@@ -43,7 +60,7 @@ function ficheros(on: On, root: string, mesa?: string, notas?: string, git = tru
   if (mesa !== undefined) disco.set(`${root}/docs/MI-MESA.md`, mesa)
   if (notas !== undefined) disco.set(`${root}/NOTAS.md`, notas)
   if (git) disco.set(`${root}/.git/info`, '')
-  const versiones = new Map<string, number>()
+  versiones.clear()
   on('session.root', async () => ({ value: root }))
   on('fs.exists', async (_, e) => ({ value: disco.has(e.path) }))
   on('fs.stat', async (_, e) => ({
@@ -519,5 +536,239 @@ test('la equis no borra la de al lado si el fichero cambió por debajo', async (
   await ui.press({ key: 'quitar-0' })
   // No se quita nada: el fichero se queda como lo dejó quien lo editó.
   expect(disco.get(NOTAS_FILE)).toEqual('# Notas\n\n- firmar el anexo\n')
+  await ui.unmount()
+})
+
+/** La mesa después de regenerarla: un ticket más, para ver que se releyó. */
+const MD2 = [
+  '> 🤖 **Generado** por `scripts/qa/listar-mi-mesa.js` el 2026-10-09, para **X**.',
+  '',
+  '## origen-qa-conductor-20261004 (1 de 4) — hoy',
+  '',
+  '```',
+  '▶  LAN-2669  ALTA La limpieza de tokens FCM muertos borra en auth y el…',
+  '·  LAN-2700  med  Lo que entró al regenerar',
+  '```',
+].join('\n')
+
+const GUION = `${ROOT}/scripts/qa/listar-mi-mesa.js`
+const MESA_FILE = `${ROOT}/docs/MI-MESA.md`
+
+/**
+ * Contesta la confirmación del botón, y se queda con lo que se preguntó.
+ *
+ * `$.ui.ask` es una llamada a `AskUserQuestion` que pasa por todos los hooks
+ * menos el de quien pregunta, así que el test la contesta como contestaría
+ * cualquier otra herramienta: el resultado va **cuestionado por su pregunta**
+ * —`{ answers: { [la pregunta]: la respuesta } }`—, que es la forma de la que
+ * el motor saca la etiqueta elegida.
+ *
+ * `respuesta` puede ser cualquier cosa: contestar «Dejarlo», o el texto libre
+ * del «Other», es lo mismo que no confirmar. Sin `respuesta` el hook revienta,
+ * que es el diálogo cerrado con escape y la sesión en la que no hay a quién
+ * preguntar (`-p`).
+ *
+ * Los dos casos van en un solo hook, y no en dos ayudantes, porque cada sitio
+ * que registra `tool.call` con su matcher le cuesta a `tsc` un buen montón de
+ * instanciaciones: con dos, este fichero se pasa del tope del compilador y lo
+ * que sale es un `TS2589` que no habla de nada de esto.
+ */
+function contesta(on: On, respuesta?: string): string[] {
+  const preguntas: string[] = []
+  on('tool.call', { tool: 'AskUserQuestion' }, async (_, e) => {
+    const pregunta = (e.questions[0] as { question?: string } | undefined)?.question ?? ''
+    preguntas.push(pregunta)
+    if (respuesta === undefined) throw new Error('nadie a quien preguntar')
+    return { result: { answers: { [pregunta]: respuesta } } }
+  })
+  return preguntas
+}
+
+/**
+ * El guion de la mesa, y un `process.run` que lo finge.
+ *
+ * La mesa nueva se escribe con `pon`, que sube el `mtime`: es la condición con
+ * la que el panel decide releer, y sin subirlo el fichero cambiaría y el panel
+ * seguiría enseñando el de antes, que no es lo que pasa con un guion de verdad.
+ */
+function conGuion(
+  on: On,
+  disco: Map<string, string>,
+  salida?: { exitCode: number; stderr?: string },
+): string[][] {
+  const corridos: string[][] = []
+  on('process.run', async (_, e) => {
+    const argv = [...e.argv]
+    corridos.push(argv)
+    // El `tail` del historial pasa por aquí también: solo el guion escribe.
+    if (argv[0] === 'node' && (salida?.exitCode ?? 0) === 0) pon(disco, MESA_FILE, MD2)
+    return {
+      value: {
+        exitCode: argv[0] === 'node' ? (salida?.exitCode ?? 0) : 1,
+        stdout: '',
+        stderr: argv[0] === 'node' ? (salida?.stderr ?? '') : '',
+        isStdoutTruncated: false,
+        isStderrTruncated: false,
+      },
+    }
+  })
+  return corridos
+}
+
+test('el ↻ corre el guion que nombra la cabecera y relee la mesa al momento', async ($, on) => {
+  const disco = ficheros(on, ROOT, MD)
+  disco.set(GUION, '// el guion de este repo')
+  abre(on)
+  const corridos = conGuion(on, disco)
+  const preguntas = contesta(on, 'Regenerar')
+  await $.command.run({ command: 'mi-mesa', args: '' } as never)
+  const ui = await $.ui.mount({ plugin: 'mi-mesa', surface: 'terminal', component: 'Pane', requestId: 'mi-mesa', props: {} as never })
+  expect(await ui.find({ type: 'Text', text: /generada 2026-10-07/ })).toBeDefined()
+  await ui.press({ key: 'regenerar' })
+  // Se pregunta con el comando entero delante, que es lo que se va a ejecutar.
+  expect(preguntas).toEqual(['¿Regenerar la mesa con «node scripts/qa/listar-mi-mesa.js»?'])
+  // Sin shell y con el intérprete puesto por la extensión, no por la cabecera.
+  expect(corridos.filter(c => c[0] === 'node')).toEqual([['node', 'scripts/qa/listar-mi-mesa.js']])
+  expect(await ui.find({ type: 'Text', text: /generada 2026-10-09/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /· LAN-2700 med/ })).toBeDefined()
+  await ui.unmount()
+})
+
+test('sin guion en disco no se pinta el botón, que no podría hacer nada', async ($, on) => {
+  ficheros(on, ROOT, MD)
+  sinGit(on)
+  abre(on)
+  await $.command.run({ command: 'mi-mesa', args: '' } as never)
+  const ui = await $.ui.mount({ plugin: 'mi-mesa', surface: 'terminal', component: 'Pane', requestId: 'mi-mesa', props: {} as never })
+  expect(await ui.find({ type: 'Button', key: 'regenerar' })).toBeUndefined()
+  await ui.unmount()
+})
+
+test('en un repo sin mesa todavía, el botón sale por la convención', async ($, on) => {
+  // Es la primera generación: no hay fichero, así que no hay cabecera que leer,
+  // y es justo cuando más falta hace el botón.
+  const disco = ficheros(on, ROOT)
+  disco.set(GUION, '// el guion de este repo')
+  abre(on)
+  const corridos = conGuion(on, disco)
+  contesta(on, 'Regenerar')
+  await $.command.run({ command: 'mi-mesa', args: '' } as never)
+  const ui = await $.ui.mount({ plugin: 'mi-mesa', surface: 'terminal', component: 'Pane', requestId: 'mi-mesa', props: {} as never })
+  expect(await ui.find({ type: 'Text', text: /No hay docs\/MI-MESA.md/ })).toBeDefined()
+  await ui.press({ key: 'regenerar' })
+  expect(corridos.filter(c => c[0] === 'node')).toEqual([['node', 'scripts/qa/listar-mi-mesa.js']])
+  expect(await ui.find({ type: 'Text', text: /· LAN-2700 med/ })).toBeDefined()
+  await ui.unmount()
+})
+
+test('un guion que revienta lo dice en el panel y no lo tira', async ($, on) => {
+  const disco = ficheros(on, ROOT, MD)
+  disco.set(GUION, '// el guion de este repo')
+  abre(on)
+  conGuion(on, disco, { exitCode: 2, stderr: 'Error: falta el token de Jira\n    en línea 40' })
+  contesta(on, 'Regenerar')
+  await $.command.run({ command: 'mi-mesa', args: '' } as never)
+  const ui = await $.ui.mount({ plugin: 'mi-mesa', surface: 'terminal', component: 'Pane', requestId: 'mi-mesa', props: {} as never })
+  await ui.press({ key: 'regenerar' })
+  expect(await ui.find({ type: 'Text', text: /salió con 2\. Error: falta/ })).toBeDefined()
+  // La mesa de antes sigue puesta: lo que falló es la generación, no la lectura.
+  expect(await ui.find({ type: 'Text', text: /▶ LAN-2669 ALTA/ })).toBeDefined()
+  await ui.unmount()
+})
+
+test('el guion de /config manda sobre la cabecera y sobre la convención', { options: { generador: 'tool/mio.js' } }, async ($, on) => {
+  const disco = ficheros(on, ROOT, MD)
+  disco.set(GUION, '// el de la cabecera')
+  disco.set(`${ROOT}/tool/mio.js`, '// el mío')
+  abre(on)
+  const corridos = conGuion(on, disco)
+  contesta(on, 'Regenerar')
+  await $.command.run({ command: 'mi-mesa', args: '' } as never)
+  const ui = await $.ui.mount({ plugin: 'mi-mesa', surface: 'terminal', component: 'Pane', requestId: 'mi-mesa', props: {} as never })
+  await ui.press({ key: 'regenerar' })
+  expect(corridos.filter(c => c[0] === 'node')).toEqual([['node', 'tool/mio.js']])
+  await ui.unmount()
+})
+
+test('decir que no deja la mesa como estaba y no corre nada', async ($, on) => {
+  const disco = ficheros(on, ROOT, MD)
+  disco.set(GUION, '// el guion de este repo')
+  abre(on)
+  const corridos = conGuion(on, disco)
+  contesta(on, 'Dejarlo')
+  await $.command.run({ command: 'mi-mesa', args: '' } as never)
+  const ui = await $.ui.mount({ plugin: 'mi-mesa', surface: 'terminal', component: 'Pane', requestId: 'mi-mesa', props: {} as never })
+  await ui.press({ key: 'regenerar' })
+  expect(corridos.filter(c => c[0] === 'node')).toEqual([])
+  expect(await ui.find({ type: 'Text', text: /generada 2026-10-07/ })).toBeDefined()
+  // Y el botón vuelve a estar: no se queda colgado en «preguntando».
+  expect(await ui.find({ type: 'Button', key: 'regenerar' })).toBeDefined()
+  await ui.unmount()
+})
+
+test('un diálogo que no se contesta tampoco corre nada', async ($, on) => {
+  const disco = ficheros(on, ROOT, MD)
+  disco.set(GUION, '// el guion de este repo')
+  abre(on)
+  const corridos = conGuion(on, disco)
+  contesta(on)
+  await $.command.run({ command: 'mi-mesa', args: '' } as never)
+  const ui = await $.ui.mount({ plugin: 'mi-mesa', surface: 'terminal', component: 'Pane', requestId: 'mi-mesa', props: {} as never })
+  await ui.press({ key: 'regenerar' })
+  expect(corridos.filter(c => c[0] === 'node')).toEqual([])
+  expect(await ui.find({ type: 'Button', key: 'regenerar' })).toBeDefined()
+  await ui.unmount()
+})
+
+test('la ↻ va dentro de la barra del título, pegada a su borde derecho', async ($, on) => {
+  const disco = ficheros(on, ROOT, MD)
+  disco.set(GUION, '// el guion de este repo')
+  abre(on)
+  await $.command.run({ command: 'mi-mesa', args: '' } as never)
+  const ui = await $.ui.mount({ plugin: 'mi-mesa', surface: 'terminal', component: 'Pane', requestId: 'mi-mesa', props: {} as never })
+  const barra = await ui.find({ type: 'Text', text: /^ MI MESA · BACKEND_LANZADERA +$/ })
+  const boton = await ui.find({ type: 'Button', key: 'regenerar' })
+  // La barra deja justo el hueco del glifo y sus dos espacios: las dos piezas
+  // suman el ancho de la fila. Rellenándola a ancho completo, el botón se sale.
+  expect(barra?.text.length).toEqual(53)
+  expect(boton?.text).toEqual(' ↻ ')
+  // `plain`: sin él el terminal le dibuja sus corchetes, y dentro de la barra
+  // eso es un botón pegado encima del título en vez de parte de él.
+  expect(boton?.props.plain).toEqual(true)
+  // Y el glifo lleva el fondo de la barra, no el del panel: por eso va como
+  // `Text` hijo y no como `label`, que un `Button` no tiene `inverse` propio.
+  expect(JSON.stringify(boton?.children)).toContain('"inverse":true')
+  await ui.unmount()
+})
+
+test('sin botón la barra del título vuelve a ser de ancho completo', async ($, on) => {
+  // Sin guion no hay hueco que dejarle: el título se queda la fila entera.
+  ficheros(on, ROOT, MD)
+  sinGit(on)
+  abre(on)
+  await $.command.run({ command: 'mi-mesa', args: '' } as never)
+  const ui = await $.ui.mount({ plugin: 'mi-mesa', surface: 'terminal', component: 'Pane', requestId: 'mi-mesa', props: {} as never })
+  const barra = await ui.find({ type: 'Text', text: /^ MI MESA · BACKEND_LANZADERA +$/ })
+  expect(barra?.text.length).toEqual(56)
+  await ui.unmount()
+})
+
+test('mientras corre, el aviso entra en la barra y se queda con el hueco', async ($, on) => {
+  const disco = ficheros(on, ROOT, MD)
+  disco.set(GUION, '// el guion de este repo')
+  abre(on)
+  // Un `process.run` que no vuelve deja el panel en mitad de la regeneración,
+  // que es el estado que no se puede ver de otra manera.
+  on('process.run', async (_, e) => {
+    if (e.argv[0] === 'node') await new Promise(() => {})
+    return { value: { exitCode: 1, stdout: '', stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
+  })
+  contesta(on, 'Regenerar')
+  await $.command.run({ command: 'mi-mesa', args: '' } as never)
+  const ui = await $.ui.mount({ plugin: 'mi-mesa', surface: 'terminal', component: 'Pane', requestId: 'mi-mesa', props: {} as never })
+  await ui.press({ key: 'regenerar' })
+  expect(await ui.find({ type: 'Text', text: /REGENERANDO…/ })).toBeDefined()
+  // Y no se deja pulsar otra vez: el aviso ocupa el sitio del botón.
+  expect(await ui.find({ type: 'Button', key: 'regenerar' })).toBeUndefined()
   await ui.unmount()
 })
