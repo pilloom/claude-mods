@@ -1,5 +1,48 @@
 # Changelog
 
+## [1.3.0] — 2026-10-29
+
+### Una `↻` para regenerar la mesa
+
+- El panel pinta un botón al lado de la fecha de generación que corre el guion
+  de la mesa de ese repositorio y la relee al momento. Mientras corre, la línea
+  dice `· regenerando…` y el botón no está: dos clics no lanzan dos guiones.
+  Un guion que falla deja su primera línea de error debajo, en rojo, y la mesa
+  de antes puesta: lo que falló es la generación, no la lectura.
+- **No hay que configurar el comando.** El fichero generado se autodeclara en
+  su cabecera y `parseMesa` ya leía esa línea para sacar la fecha; ahora saca
+  también el guion. Antes de la primera generación no hay cabecera que leer
+  —que es justo cuando más falta hace el botón—, así que se prueba la
+  convención de la casa: `scripts/qa/listar-mi-mesa.js` y
+  `tool/listar_mi_mesa.dart`. Y `/config` lleva un **Guion que regenera la
+  mesa** para el repositorio que lo tenga en otro sitio. Sin ninguno de los
+  tres no se pinta el botón: un control que no puede hacer nada sobra.
+- **Pregunta antes de correr**, con el comando entero delante
+  (`¿Regenerar la mesa con «node scripts/qa/listar-mi-mesa.js»?`). Solo la
+  opción de regenerar cuenta como un sí: «Dejarlo», el texto libre del *Other*
+  y el escape dejan todo como estaba, y en un `-p` —donde no hay a quién
+  preguntar— no corre nada. Las tres fases van en un campo y no en dos
+  banderas, así que no existe el estado de estar preguntando y corriendo a la
+  vez.
+- La ruta sale de un fichero **versionado**, así que no se ejecuta lo que diga
+  la cabecera sino lo que pasa un filtro cerrado: `argv` y nunca `sh -c`, el
+  intérprete puesto por la extensión y no por el fichero (`.js` → `node`,
+  `.dart` → `dart run`; un `.sh` o un `.py` no), ruta relativa sin `..` ni
+  caracteres raros, que exista en disco, `cwd` en la raíz y un minuto de tope.
+  Lo peor que puede pasar al pulsar es que corra un guion del repositorio, que
+  es el que ya se corre a mano, y antes de eso hay que decir que sí.
+
+### Lo demás
+
+- El `tsconfig.json` deja fuera `claude-code-mcp`, el d.ts con los esquemas de
+  todas las herramientas MCP conectadas al guardar el mod. En una máquina con
+  varios servidores la unión de `tool.call` se comía el tope de instanciaciones
+  de `tsc`: salía un `TS2589` en el primer `$.tool.call` del programa —un error
+  que no habla de nada de esto y que se movía de fichero según cuántos
+  servidores hubiera esa vez—. El chequeo baja de 10,3 M de instanciaciones a
+  0,3 M, y la herramienta del propio mod sigue tipada por la ampliación de
+  `McpToolInputs` de `types/index.d.ts`.
+
 ## [1.2.1] — 2026-10-25
 
 ### Una equis para quitar la nota

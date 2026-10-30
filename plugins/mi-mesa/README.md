@@ -34,9 +34,10 @@ donde haya con qué.
 
 Un `docs/MI-MESA.md` en la raíz del repositorio de la sesión, que es el fichero
 que **genera** el guion de la mesa de cada repo (`scripts/qa/listar-mi-mesa.js`
-en los de Node, `tool/listar_mi_mesa.dart` en los de Flutter). El mod **no lo
-genera**: solo lo lee. En un repo que no lo tenga, el panel lo dice con el
-nombre del repo en lugar de salir en blanco.
+en los de Node, `tool/listar_mi_mesa.dart` en los de Flutter). El mod no lo
+escribe él: lo lee, y la **`↻`** del panel corre ese guion por ti. En un repo
+que no lo tenga, el panel lo dice con el nombre del repo en lugar de salir en
+blanco.
 
 El panel se abre solo al empezar la sesión, y a mano con `/mi-mesa`.
 
@@ -63,6 +64,59 @@ Dos cosas que **no** entran: las barras (`/clear`, `/continuar`), que son órden
 al host y no mensajes, y los mensajes de otros repos. El filtro por repositorio
 es **exacto, no por prefijo**: `backend_lanzadera` es prefijo de
 `backend_lanzadera_driver`, y filtrar por prefijo mezclaría dos de los repos.
+
+## Regenerar la mesa
+
+El fichero lo escribe el guion de cada repositorio, y el panel pinta una **`↻`**
+al lado de la fecha de generación para correrlo sin salir de la sesión. Antes de
+ejecutar nada **pregunta**, con el comando entero delante:
+
+```
+¿Regenerar la mesa con «node scripts/qa/listar-mi-mesa.js»?
+  Regenerar · Dejarlo
+```
+
+Solo «Regenerar» corre el guion; «Dejarlo», el texto libre del *Other* y el
+escape dejan todo como estaba. Y en un `-p`, donde no hay nadie a quien
+preguntar, no corre: eso es lo que se quiere antes de ejecutar algo que nadie va
+a ver.
+
+Mientras corre, la línea dice `· regenerando…` y el botón no está: un control
+que se deja pulsar y no hace nada se pulsa tres veces. Al acabar, la mesa se
+relee en el momento. Si el guion falla, su primera línea de error sale debajo en
+rojo y la mesa de antes se queda puesta: lo que falló es la generación, no la
+lectura.
+
+**El guion no hay que configurarlo**: el fichero generado se autodeclara en su
+cabecera —«🤖 **Generado** por `scripts/qa/listar-mi-mesa.js` el …»—, y de ahí
+sale. Tres fuentes, en este orden:
+
+1. Lo que se haya puesto en `/config` (**Guion que regenera la mesa**), para el
+   repositorio que lo tenga en otro sitio.
+2. La cabecera de `docs/MI-MESA.md`, que es lo normal.
+3. La convención: `scripts/qa/listar-mi-mesa.js` o `tool/listar_mi_mesa.dart`.
+   Es lo que hace que el botón salga **antes de la primera generación**, que es
+   cuando no hay cabecera que leer y cuando más falta hace.
+
+La primera que exista en disco es la que queda. Si no hay ninguna, **no hay
+botón**: en un repositorio sin guion, un control que no puede hacer nada sobra.
+
+### Lo que el botón no ejecuta
+
+La ruta sale de un fichero **versionado**, así que quien pueda commitear
+`docs/MI-MESA.md` elegiría lo que corre al pulsar. Por eso no se ejecuta lo que
+diga la cabecera, sino lo que pasa un filtro cerrado (`comandoDe`):
+
+- `argv` y **nunca** `sh -c`: no hay shell que interprete nada.
+- El **intérprete lo pone la extensión**, no el fichero: `.js` → `node`,
+  `.dart` → `dart run`. Un `.sh`, un `.py` o algo sin extensión no se ejecutan.
+- Ruta **relativa**, sin `..` y sin caracteres raros: una absoluta apunta a
+  cualquier sitio de la máquina.
+- Tiene que **existir** en disco, y se corre con `cwd` en la raíz del repo y un
+  minuto de tope.
+
+Lo peor que puede pasar al pulsar es que corra un guion del propio repositorio,
+que es el que ya se corre a mano —y antes de eso hay que decir que sí—.
 
 ## El post-it
 
@@ -225,7 +279,7 @@ las dos se verían apagadas**: están en un solo sitio cada una, al final de
 
 ```bash
 claude plugin validate .            # manifiesto y módulo, como los lee el motor
-claude plugin test .                # 30 tests
+claude plugin test .                # 53 tests
 ```
 
 Para los tipos hace falta que el motor haya cargado el mod alguna vez desde su
@@ -236,6 +290,17 @@ build) y el `tsconfig.json` de aquí lo extiende.
 CLAUDE_CODE_PLUGIN_DIRS=/ruta/a/plugins/mi-mesa claude   # cargarlo desde disco
 pnpm exec tsc -p .                                       # una vez haya tipos
 ```
+
+El `tsconfig.json` de aquí **deja fuera `claude-code-mcp`**, que es uno de los
+tres d.ts que escribe el motor: el de los esquemas de todas las herramientas MCP
+que hubiera conectadas al guardar el mod. En una máquina con varios servidores
+—trescientas y pico herramientas— la unión de `tool.call` se come el tope de
+instanciaciones de `tsc`, y lo que sale es un **`TS2589`** en el primer
+`$.tool.call` del programa, que no habla de nada de esto y se mueve de fichero
+según cuántos servidores hubiera esa vez. Con él fuera, el chequeo baja de
+**10,3 M de instanciaciones a 0,3 M** y no se pierde nada: la herramienta del
+propio mod la declara `types/index.d.ts` ampliando `McpToolInputs` —por eso está
+ahí— y el mod no llama a las de otros servidores.
 
 En una sesión interactiva la carpeta se vigila: al guardar, el módulo se recarga
 —`register` corre otra vez y los temporizadores del anterior se tiran—. Lo que

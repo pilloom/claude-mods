@@ -40,12 +40,69 @@ function partirCola(cola: string): { summary: string; otherThreads: string; owne
 }
 
 /**
+ * El guion que escribió la mesa, tal como la cabecera del fichero lo nombra.
+ *
+ * El fichero generado se autodeclara —«**Generado** por `scripts/qa/listar-mi-mesa.js`
+ * el …»—, y de ahí sale el comando del botón de regenerar sin pedirle a nadie
+ * que configure nada: cada repositorio nombra el suyo, que es el `.js` en los
+ * de Node y el `.dart` en los de Flutter.
+ *
+ * Es texto de un fichero versionado, así que lo que se lee aquí **no** se
+ * ejecuta sin más: `comandoDe` decide qué se acepta.
+ */
+const GUION = /generado\*\* por `([^`\n]+)`/i
+
+/**
+ * Los intérpretes que el botón de regenerar acepta, por extensión.
+ *
+ * La lista es cerrada a propósito: es lo que convierte una ruta leída de un
+ * fichero del repositorio en un comando acotado. Lo que no esté aquí no se
+ * ejecuta, aunque la cabecera lo nombre.
+ */
+const INTERPRETES: Record<string, string[]> = {
+  '.js': ['node'],
+  '.mjs': ['node'],
+  '.cjs': ['node'],
+  '.dart': ['dart', 'run'],
+}
+
+/** Los sitios donde se busca el guion cuando no hay cabecera que lo diga. */
+export const GUIONES = ['scripts/qa/listar-mi-mesa.js', 'tool/listar_mi_mesa.dart']
+
+/**
+ * El comando que regenera la mesa, a partir de la ruta de su guion.
+ *
+ * Devuelve el `argv` de `$.process.run` —sin shell— o nada si la ruta no es de
+ * las que se aceptan. Lo que se exige, y por qué: **relativa** y sin `..`,
+ * porque una ruta absoluta apunta a cualquier sitio de la máquina y esto sale
+ * de un fichero que cualquiera puede commitear; solo letras, dígitos, puntos,
+ * barras y guiones, que es lo que puede ser el nombre de un guion; y una
+ * extensión de `INTERPRETES`, que es quien decide con qué se ejecuta. Así lo
+ * peor que puede pasar al pulsar el botón es que corra un guion del propio
+ * repositorio, que es el que ya se corre a mano.
+ *
+ * No comprueba que exista: eso es del disco y lo hace quien llama.
+ */
+export function comandoDe(ruta: string): string[] | undefined {
+  const limpia = ruta.trim()
+  // El tope es contra una cabecera absurda, no contra una ruta larga de verdad.
+  if (!limpia || limpia.length > 200) return undefined
+  if (!/^[\w./-]+$/u.test(limpia)) return undefined
+  // Un tramo vacío es la barra de delante, la del final o una doble.
+  if (limpia.split('/').some(tramo => tramo === '' || tramo === '..')) return undefined
+  const ext = /\.[a-z]+$/u.exec(limpia)?.[0]
+  const interprete = ext === undefined ? undefined : INTERPRETES[ext]
+  return interprete === undefined ? undefined : [...interprete, limpia]
+}
+
+/**
  * Lee del Markdown generado por listar-mi-mesa.js solo los tickets, en el
  * orden y el hilo en que salen. Se para en «Lo que NO está aquí», que no es
  * la mesa sino lo que se queda fuera.
  */
 export function parseMesa(text: string, mtimeMs: number): Omit<Mesa, 'repo'> {
   const generated = /generado\*\* por .*? el (\d{4}-\d{2}-\d{2})/i.exec(text)?.[1] ?? '?'
+  const generador = GUION.exec(text)?.[1]
   const hilos: Hilo[] = []
   let current: Hilo | undefined
   for (const raw of text.split('\n')) {
@@ -63,7 +120,14 @@ export function parseMesa(text: string, mtimeMs: number): Omit<Mesa, 'repo'> {
       current.tickets.push(ticket)
     }
   }
-  return { generated, hilos: hilos.filter(h => h.tickets.length > 0), mtimeMs }
+  // `generador` solo si la cabecera lo dice: una mesa sin él no gana un campo
+  // vacío, y quien resuelve el guion sabe que ahí no hay nada que mirar.
+  return {
+    generated,
+    hilos: hilos.filter(h => h.tickets.length > 0),
+    mtimeMs,
+    ...(generador === undefined ? {} : { generador }),
+  }
 }
 
 /**

@@ -1,10 +1,12 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
-import type { Mesa, Notas, Prompt } from '../types'
+import type { Mesa, Notas, Prompt, Regen } from '../types'
 import {
   anadirNota,
+  comandoDe,
   envolver,
+  GUIONES,
   parseHistory,
   parseMesa,
   parseNotas,
@@ -41,11 +43,34 @@ const HERRAMIENTA = 'mcp__mi-mesa__nota'
 const ULTIMOS = 10
 /** Cola del historial que se lee: de sobra para sacar 10 de este repo entre los cuatro. */
 const COLA = 1200
+/**
+ * Lo que se le da al guion de la mesa antes de matarlo, en milisegundos.
+ *
+ * Un minuto es largo para lo que tarda y corto para colgar el panel: el guion
+ * consulta el gestor de tickets, así que una red lenta no es un fallo, pero
+ * tampoco se espera indefinidamente a un proceso que no vuelve.
+ */
+const REGEN_TIMEOUT = 60_000
+/** Lo que hay que contestar a la confirmación para que el guion corra. */
+const CONFIRMA = 'Regenerar'
 const EMPTY: Mesa = { repo: '', generated: '?', hilos: [], mtimeMs: 0 }
 const SIN_NOTAS: Notas = { lines: [], mtimeMs: 0 }
+const QUIETO: Regen = { fase: 'quieto' }
 const mesa = atom({ plugin: 'mi-mesa', key: 'mesa' } as const, EMPTY)
 const prompts = atom({ plugin: 'mi-mesa', key: 'prompts' } as const, [] as Prompt[])
 const notas = atom({ plugin: 'mi-mesa', key: 'notas' } as const, SIN_NOTAS)
+const regen = atom({ plugin: 'mi-mesa', key: 'regen' } as const, QUIETO)
+
+/**
+ * El guion de la mesa que se haya puesto en `/config`, si se puso.
+ *
+ * Es de módulo, como `suena` lo es del `register`: las funciones que resuelven
+ * el guion son de módulo también y `options` solo llega al `register`, que lo
+ * deja aquí una vez. Es el escape para el repositorio raro —el que genera su
+ * mesa de otra manera, o con el guion en otro sitio— y lo normal es que esté
+ * vacío y manden la cabecera del fichero y la convención.
+ */
+let configurado: string | undefined
 
 // La mesa es la del repo en el que corre la sesión: backend, front o el que
 // tenga su docs/MI-MESA.md. El título del panel lleva el nombre de esa carpeta.
@@ -60,15 +85,132 @@ async function refresh($: EngineInterface): Promise<void> {
   try {
     if (!(await $.fs.exists(file))) {
       await update($, mesa, () => ({ ...EMPTY, repo, error: `No hay ${MESA_FILE} en ${repo}` }))
+      // Sin fichero no hay cabecera que nombre el guion, y es justo cuando más
+      // falta hace el botón: la primera generación. Queda la convención.
+      await refreshGuion($)
       return
     }
     const { mtimeMs } = await $.fs.stat(file)
     const prev = await read($, mesa)
     if (mtimeMs === prev.mtimeMs && prev.repo === repo && !prev.error) return
     const text = await $.fs.read(file)
-    await update($, mesa, () => ({ ...parseMesa(text, mtimeMs), repo }))
+    const leida = parseMesa(text, mtimeMs)
+    await update($, mesa, () => ({ ...leida, repo }))
+    await refreshGuion($, leida.generador)
   } catch (err) {
     await update($, mesa, m => ({ ...m, repo, error: String(err) }))
+  }
+}
+
+/**
+ * Deja en el atom la ruta del guion que regenera la mesa de este repositorio.
+ *
+ * Tres fuentes, en este orden: lo que se haya puesto en `/config`, lo que la
+ * cabecera del fichero generado dice que lo escribió, y la convención de los
+ * repositorios de la casa. La primera que exista en disco y pase `comandoDe`
+ * es la que queda; si no pasa ninguna, no hay guion y el panel no pinta el
+ * botón, que es mejor que un control que no puede hacer nada.
+ *
+ * Se resuelve aquí y no al dibujar porque mirar el disco en cada redibujado se
+ * paga, y lo que se busca no cambia de un dibujado al siguiente.
+ */
+async function refreshGuion($: EngineInterface, enCabecera?: string): Promise<void> {
+  const prev = await read($, regen)
+  // Con una confirmación abierta o un guion corriendo no se le cambia el guion
+  // debajo: el `refresh` de después de regenerar pasa por aquí, y lo que se
+  // está ejecutando —o lo que se acaba de preguntar— manda.
+  if (prev.fase !== 'quieto') return
+  const guion = await buscarGuion($, [configurado, enCabecera, ...GUIONES])
+  if (guion === prev.guion) return
+  await update($, regen, r => ({ ...r, guion }))
+}
+
+/** La primera de las rutas candidatas que se acepta y además está en disco. */
+async function buscarGuion(
+  $: EngineInterface,
+  candidatas: (string | undefined)[],
+): Promise<string | undefined> {
+  const { root } = await repoOf($)
+  for (const ruta of candidatas) {
+    if (!ruta || comandoDe(ruta) === undefined) continue
+    try {
+      if (await $.fs.exists(`${root}/${ruta}`)) return ruta
+    } catch {
+      // Una ruta que no se deja mirar es una ruta que no se usa.
+    }
+  }
+  return undefined
+}
+
+/**
+ * Pregunta y, si se dice que sí, corre el guion y relee lo que haya escrito.
+ *
+ * Se pregunta **con el guion delante**: lo que se va a ejecutar sale de la
+ * cabecera de un fichero versionado, así que lo que el panel enseña antes de
+ * correrlo es el comando entero, y quien lo lee ve si es el suyo. `comandoDe`
+ * ya acota lo que puede llegar aquí —`argv` y nunca `sh -c`, el intérprete
+ * puesto por la extensión, ruta relativa de dentro del repositorio—; la
+ * confirmación es la segunda vuelta de lo mismo, con una persona mirando.
+ *
+ * Cualquier respuesta que no sea exactamente `CONFIRMA` deja todo como estaba,
+ * y eso incluye el texto libre del «Other» del diálogo: ahí se escribe una
+ * duda, no un sí. Un diálogo cerrado con escape, o una sesión sin nadie a quien
+ * preguntar (`-p`), hacen que `ask` reviente, y es el mismo caso.
+ *
+ * Dos pulsaciones no abren dos diálogos ni lanzan dos guiones: la fase lo corta
+ * en la segunda. Y lo que falle se queda en el atom en vez de tirar el panel,
+ * con la salida del guion recortada a su primera línea, que es donde dice qué
+ * pasó.
+ */
+async function regenerar($: EngineInterface): Promise<void> {
+  const { root } = await repoOf($)
+  const prev = await read($, regen)
+  if (prev.fase !== 'quieto' || prev.guion === undefined) return
+  const argv = comandoDe(prev.guion)
+  if (argv === undefined) return
+  await update($, regen, r => ({ fase: 'preguntando' as const, guion: r.guion }))
+  if (!(await confirmar($, argv))) {
+    await update($, regen, r => ({ fase: 'quieto' as const, guion: r.guion }))
+    return
+  }
+  await update($, regen, r => ({ fase: 'corriendo' as const, guion: r.guion }))
+  try {
+    const { exitCode, stdout, stderr } = await $.process.run(argv, {
+      cwd: root,
+      timeoutMs: REGEN_TIMEOUT,
+    })
+    const dicho = (stderr.trim() ? stderr : stdout).split('\n').find(l => l.trim())?.trim() ?? ''
+    await update($, regen, r => ({
+      fase: 'quieto' as const,
+      guion: r.guion,
+      error: exitCode === 0 ? undefined : `${prev.guion} salió con ${exitCode}. ${dicho}`,
+    }))
+  } catch (err) {
+    // Un guion que no existe ya, un intérprete que no está, el minuto agotado.
+    await update($, regen, r => ({ fase: 'quieto' as const, guion: r.guion, error: String(err) }))
+  }
+  // La mesa la acaba de reescribir el guion: se relee sin esperar al ciclo.
+  await refresh($)
+}
+
+/**
+ * Pregunta si se corre el comando, y solo cuenta como sí la opción de correrlo.
+ *
+ * El diálogo es el del motor (`$.ui.ask`), el mismo con el que se pregunta todo
+ * lo demás en la sesión: no hay que aprenderse otro, y en un `-p` —donde no hay
+ * nadie a quien preguntar— revienta, que es exactamente lo que se quiere que
+ * pase antes de ejecutar nada sin que nadie lo vea.
+ */
+async function confirmar($: EngineInterface, argv: readonly string[]): Promise<boolean> {
+  try {
+    const dicho = await $.ui.ask(`¿Regenerar la mesa con «${argv.join(' ')}»?`, {
+      options: [CONFIRMA, 'Dejarlo'],
+      header: 'Mi mesa',
+    })
+    return dicho === CONFIRMA
+  } catch {
+    // Cerrado con escape, o una sesión en la que no hay a quién preguntar.
+    return false
   }
 }
 
@@ -284,6 +426,9 @@ export const register: Register = (on, options) => {
   // El sonido se puede apagar desde /config: es la clase de añadido que una
   // máquina compartida o una videollamada quieren callar sin desinstalar nada.
   const suena = options.sonido !== false
+  // El guion de la mesa, si se puso: lo normal es que no y manden la cabecera
+  // del fichero y la convención. Se guarda crudo; `comandoDe` decide si vale.
+  configurado = typeof options.generador === 'string' ? options.generador.trim() : undefined
 
   on('session.start', async ($, e, next) => {
     await $.command.register({
@@ -415,6 +560,7 @@ export const register: Register = (on, options) => {
     const m = await read($, mesa)
     const ultimos = await read($, prompts)
     const post = await read($, notas)
+    const reg = await read($, regen)
     const total = m.hilos.reduce((n, hilo) => n + hilo.tickets.length, 0)
     // El ancho es el del cuerpo del Pane, que es lo que una barra o una regla
     // de ancho completo tiene que medir: el del viewport es el de la pantalla,
@@ -522,10 +668,40 @@ export const register: Register = (on, options) => {
           <Text bold inverse color="cyan">
             {` MI MESA · ${(m.repo || 'sin repo').toUpperCase()} `.padEnd(width)}
           </Text>
-          <Text dimColor>
-            {`${total} tickets · ${m.hilos.length} hilos · generada ${m.generated}`}
-          </Text>
+          {/* La fecha de generación y, pegado a ella, el botón que la cambia:
+              es el sitio que lo explica sin rótulo, y no la barra del título,
+              donde la `inverse` de ancho completo no llega hasta el glifo y
+              deja el botón flotando sobre el fondo del panel.
+              Mientras corre no hay botón, hay texto: un control que se deja
+              pulsar y no hace nada se pulsa tres veces, y el guion tarda. */}
+          {/* La fila lleva clave porque es el ámbito del hover, como la de
+              cada nota: la `↻` se enciende apuntando a cualquier parte de la
+              línea de la fecha y no solo al glifo, que en un terminal es un
+              blanco de un carácter. */}
+          <Box key="cabecera" flexDirection="row">
+            <Text dimColor>
+              {`${total} tickets · ${m.hilos.length} hilos · generada ${m.generated}`}
+            </Text>
+            {reg.fase === 'corriendo' ? <Text color="cyan">{' · regenerando…'}</Text> : null}
+            {reg.fase === 'quieto' && reg.guion !== undefined ? (
+              <Button
+                key="regenerar"
+                plain
+                dimColor
+                label=" ↻"
+                hover={{ color: 'cyan', bold: true }}
+                onPress={() => {
+                  // Sin `await` y con el fallo tragado, como la equis del
+                  // post-it: lo que se dibuja no espera a un botón, y un guion
+                  // que revienta no puede tirar el panel. Lo que pasó se lee en
+                  // la línea de abajo.
+                  void regenerar($).catch(() => {})
+                }}
+              />
+            ) : null}
+          </Box>
           {m.error ? <Text color="red">{cut(m.error, width)}</Text> : null}
+          {reg.error ? <Text color="red">{cut(reg.error, width)}</Text> : null}
           {m.hilos.map(hilo => (
             <Box key={hilo.title} flexDirection="column" marginTop={1}>
               <Text color="cyan">{cut(hilo.title, width)}</Text>

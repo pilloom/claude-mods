@@ -1,6 +1,14 @@
 import { expect, test } from 'claude-code/testing'
 
-import { anadirNota, envolver, parseHistory, parseMesa, parseNotas, quitarNota } from './parse'
+import {
+  anadirNota,
+  comandoDe,
+  envolver,
+  parseHistory,
+  parseMesa,
+  parseNotas,
+  quitarNota,
+} from './parse'
 
 const SAMPLE = `# Mi mesa de trabajo
 
@@ -212,4 +220,45 @@ test('una palabra más larga que la fila se parte en vez de dejarla en blanco', 
 
 test('una línea sin viñeta se parte sin inventarse una sangría', async () => {
   expect(envolver('cuatro cinco seis siete', 12)).toEqual(['cuatro cinco', 'seis siete'])
+})
+
+test('la cabecera del fichero dice qué guion lo generó, y de ahí sale el comando', () => {
+  // La mesa se autodeclara, así que el botón de regenerar no necesita que nadie
+  // configure nada: cada repositorio nombra el suyo en su propia cabecera.
+  expect(parseMesa(SAMPLE, 1).generador).toBe('scripts/qa/listar-mi-mesa.js')
+  expect(comandoDe('scripts/qa/listar-mi-mesa.js')).toEqual([
+    'node',
+    'scripts/qa/listar-mi-mesa.js',
+  ])
+  expect(comandoDe('tool/listar_mi_mesa.dart')).toEqual(['dart', 'run', 'tool/listar_mi_mesa.dart'])
+})
+
+test('una mesa sin cabecera no trae guion en vez de traer uno inventado', () => {
+  expect(parseMesa('## hilo\n\n▶  LAN-1  ALTA algo\n', 1).generador).toBeUndefined()
+})
+
+/**
+ * Lo que `comandoDe` no acepta, que es lo que acota el riesgo del botón.
+ *
+ * La ruta sale de un fichero versionado: quien pueda commitear `docs/MI-MESA.md`
+ * elige lo que correría al pulsar. Por eso solo pasa una ruta relativa de dentro
+ * del repositorio con una extensión de la lista, y lo demás no se ejecuta aunque
+ * la cabecera lo nombre.
+ */
+test('una ruta que apunta fuera, o a lo que no es un guion, no se ejecuta', () => {
+  for (const ruta of [
+    '/usr/bin/curl',
+    '~/malo.js',
+    '../../fuera/malo.js',
+    'scripts/../../malo.js',
+    'scripts/malo.sh',
+    'scripts/malo.py',
+    'scripts/sin-extension',
+    'scripts/malo.js; rm -rf /',
+    'scripts/$(whoami).js',
+    '',
+    '   ',
+  ]) {
+    expect(comandoDe(ruta)).toBeUndefined()
+  }
 })

@@ -1,7 +1,7 @@
 {
   "name": "mi-mesa",
-  "version": "1.2.1",
-  "description": "Panel con tu mesa de trabajo (docs/MI-MESA.md) agrupada por hilo, el post-it de NOTAS.md —que se escribe pidiéndolo o con /nota— y los últimos mensajes que le pasaste a Claude Code, más un sonido al acabar el turno",
+  "version": "1.3.0",
+  "description": "Panel con tu mesa de trabajo (docs/MI-MESA.md) agrupada por hilo y con un botón para regenerarla, el post-it de NOTAS.md —que se escribe pidiéndolo o con /nota— y los últimos mensajes que le pasaste a Claude Code, más un sonido al acabar el turno",
   "types": "./types/index.d.ts",
   "author": {
     "name": "RBSistemas"
@@ -13,6 +13,12 @@
       "default": true,
       "description": "Suena un clip corto cuando Claude acaba de contestar (solo macOS)",
       "title": "Sonido al acabar el turno"
+    },
+    "generador": {
+      "type": "string",
+      "default": "",
+      "description": "Ruta relativa del guion que genera docs/MI-MESA.md, para el botón ↻ del panel. Vacío: se lee de la cabecera del fichero y, si no, de scripts/qa/listar-mi-mesa.js o tool/listar_mi_mesa.dart",
+      "title": "Guion que regenera la mesa"
     }
   }
 }
