@@ -726,8 +726,17 @@ export const register: Register = (on, options) => {
             <Box key={hilo.title} flexDirection="column" marginTop={1}>
               <Text color="cyan">{cut(hilo.title, width)}</Text>
               {hilo.tickets.map(t => (
+                /* El tipo va entre la marca de estado y la clave, y solo
+                   si la mesa lo escribe: así las dos cosas que se leen de un
+                   vistazo —en qué estado está y de qué es— quedan juntas al
+                   principio de la línea, y el resumen sigue empezando donde
+                   siempre en las mesas que todavía no traen la columna.
+                   Le quita tres al hueco del resumen y no dos: el emoji ocupa
+                   dos columnas del terminal y `cut` cuenta caracteres, igual
+                   que el recorte del post-it. Pasarse de ancho envuelve la
+                   línea y descoloca la lista entera, así que se peca de corto. */
                 <Text key={t.key} dimColor={t.mark === '·'}>
-                  {`${t.mark} ${t.key} ${t.priority.padEnd(4)} ${cut(t.summary, Math.max(10, width - 20))}${t.owner ? ` → ${t.owner}` : ''}`}
+                  {`${t.mark} ${t.tipo ? `${t.tipo} ` : ''}${t.key} ${t.priority.padEnd(4)} ${cut(t.summary, Math.max(10, width - (t.tipo ? 23 : 20)))}${t.owner ? ` → ${t.owner}` : ''}`}
                 </Text>
               ))}
             </Box>

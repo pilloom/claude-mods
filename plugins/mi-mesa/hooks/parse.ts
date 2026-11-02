@@ -1,7 +1,15 @@
 import type { Hilo, Mesa, Notas, Prompt, Ticket } from '../types'
 
 /**
- * Una línea de ticket: marca, clave, prioridad y el resto.
+ * Una línea de ticket: la marca de estado y todo lo que viene detrás.
+ *
+ * Lo de detrás **ya no se parte aquí**. La línea tiene una columna que puede
+ * estar o no estar —el tipo del ticket (`🐞`, `✅`, `📖`), que unas mesas
+ * escriben y otras todavía no—, y meterla como grupo opcional de este patrón
+ * obliga a decir *qué* emojis se aceptan: un tipo nuevo en Jira, con un emoji
+ * que esa lista no conociera, dejaría de casar la línea **entera** y el ticket
+ * desaparecería del panel. Partiendo por tokens no hay lista cerrada: lo que
+ * esté delante de la clave es el tipo, sea lo que sea.
  *
  * La clave va **con el prefijo del proyecto abierto**, no con uno concreto. La
  * primera versión pedía `LAN-\d+`, que es el de `backend_lanzadera`, de donde
@@ -14,7 +22,56 @@ import type { Hilo, Mesa, Notas, Prompt, Ticket } from '../types'
  * La cola se parte aparte y no con más grupos opcionales aquí: así se lee qué
  * se separa y en qué orden, y un resumen con un `+` dentro no desplaza nada.
  */
-const TICKET = /^(▶|·|🚧)\s+([A-Z][A-Z0-9]*-\d+)\s+(\S+)\s+(.*)$/u
+const TICKET = /^(▶|·|🚧)\s+(.*)$/u
+
+/**
+ * La clave de un ticket, y nada más.
+ *
+ * Es lo que decide si el primer token de la línea es el tipo o ya es la clave,
+ * así que va **anclada por los dos lados**: `LAN-2669algo` no es una clave, y
+ * aceptarlo correría una columna entera.
+ */
+const CLAVE = /^[A-Z][A-Z0-9]*-\d+$/u
+
+/** Arranca el primer token de `s` y devuelve también lo que queda detrás. */
+function partirToken(s: string): { token: string; resto: string } | undefined {
+  const m = /^(\S+)\s+(.*)$/u.exec(s.trimStart())
+  if (!m) return undefined
+  return { token: m[1] ?? '', resto: m[2] ?? '' }
+}
+
+/**
+ * Lee una línea de ticket: `marca [tipo] clave prioridad resumen [+hilos] [→quién]`.
+ *
+ * El tipo es **opcional** porque cada repositorio tiene su propio guion
+ * generador y se portan de uno en uno: la mesa que todavía no escribe esa
+ * columna se lee igual que antes, y el panel se limita a no pintar lo que no
+ * hay. Es la misma regla que la columna de `→ quién lo tiene`.
+ *
+ * Una línea que no deja una clave donde toca no es un ticket y se descarta, que
+ * es lo que mantiene fuera del panel lo que empieza por `·` sin serlo.
+ */
+function leerTicket(mark: string, cola: string): Ticket | undefined {
+  const primero = partirToken(cola)
+  if (!primero) return undefined
+  // Lo que esté delante de la clave es el tipo. No se compara contra ninguna
+  // lista: el emoji lo elige el guion de cada repositorio, no este fichero.
+  const tipo = CLAVE.test(primero.token) ? undefined : primero.token
+  const conClave = tipo === undefined ? primero : partirToken(primero.resto)
+  if (!conClave || !CLAVE.test(conClave.token)) return undefined
+  const conPrioridad = partirToken(conClave.resto)
+  if (!conPrioridad) return undefined
+  return {
+    mark,
+    key: conClave.token,
+    priority: conPrioridad.token,
+    ...partirCola(conPrioridad.resto),
+    // `tipo` solo si la mesa lo escribe: la de un repo sin esa columna no gana
+    // un campo vacío, y el panel decide por su ausencia que ahí no pinta nada
+    // en vez de dejar un hueco.
+    ...(tipo === undefined ? {} : { tipo }),
+  }
+}
 
 /**
  * Quién lo tiene, si no eres tú: `→ sin asignar`, `→ Nombre`.
@@ -115,9 +172,8 @@ export function parseMesa(text: string, mtimeMs: number): Omit<Mesa, 'repo'> {
     }
     const m = TICKET.exec(line)
     if (m && current) {
-      const [, mark = '', key = '', priority = '', cola = ''] = m
-      const ticket: Ticket = { mark, key, priority, ...partirCola(cola) }
-      current.tickets.push(ticket)
+      const ticket = leerTicket(m[1] ?? '', m[2] ?? '')
+      if (ticket) current.tickets.push(ticket)
     }
   }
   // `generador` solo si la cabecera lo dice: una mesa sin él no gana un campo

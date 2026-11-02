@@ -1,5 +1,27 @@
 # Changelog
 
+## [1.4.0] — 2026-11-02
+
+### El tipo del ticket, en un emoji
+
+- Cada línea del panel dice **de qué es** el ticket entre la marca de estado y
+  la clave: `🐞` un error, `✅` una tarea o una subtarea, `📖` una historia,
+  `❔` un tipo que el guion de la mesa no conoce. Las dos cosas que se leen de
+  un vistazo —en qué estado está y de qué es— quedan juntas al principio de la
+  línea, y el resumen pierde tres columnas: el emoji ocupa dos del terminal y
+  el recorte cuenta caracteres, así que se peca de corto antes que envolver la
+  línea y descolocar la lista.
+- **El emoji lo elige la mesa, no el mod.** Aquí no hay tabla de tipos: se
+  pinta el carácter que traiga el fichero. De paso, el patrón de la línea dejó
+  de enumerar lo que acepta en esa columna —lo que esté delante de la clave es
+  el tipo, sea lo que sea—, porque con una lista cerrada un tipo nuevo en Jira
+  habría dejado de casar la línea **entera** y el ticket habría desaparecido
+  del panel en vez de salir sin emoji.
+- **La columna es opcional** y la mesa que no la escribe se lee como antes, sin
+  ganar un campo vacío ni dejar un hueco: los guiones generadores viven en cada
+  repositorio y se portan de uno en uno. El primero que la escribe es el de
+  `backend_lanzadera`.
+
 ## [1.3.0] — 2026-10-29
 
 ### Una `↻` para regenerar la mesa
