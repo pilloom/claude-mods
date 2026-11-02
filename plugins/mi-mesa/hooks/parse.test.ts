@@ -116,7 +116,92 @@ test('separa quién lo tiene en lugar de dejarlo pegado al resumen', () => {
   expect(mio?.summary).toBe('Un comprobante en PDF o un vídeo no se pueden borrar de…')
 })
 
+/**
+ * La mesa que **sí** escribe el tipo del ticket, con la columna entre la marca
+ * de estado y la clave. Copiada de `backend_lanzadera`, que es la
+ * implementación de referencia y el primer repositorio que la escribe.
+ */
+const CON_TIPO = `# Mi mesa de trabajo
+
+> 🤖 **Generado** por \`scripts/qa/listar-mi-mesa.js\` el 2026-11-02, para **Alguien**.
+
+## en curso (2) — hoy
+
+\`\`\`
+▶  🐞 LAN-2669  ALTA La limpieza de tokens FCM muertos borra en auth y el…  +token-fcm
+·  ✅ LAN-2670  med  El sondeo mantiene vivo a un conductor que ya no está  → sin asignar
+🚧 📖 LAN-2678  baja Mandar positionAgeMs en el probe-ack
+·  ❔ LAN-2700  med  De un tipo que esta tabla no conoce
+\`\`\`
+`
+
+test('lee el tipo del ticket cuando la mesa escribe esa columna', () => {
+  const tickets = parseMesa(CON_TIPO, 1).hilos[0]?.tickets ?? []
+
+  expect(tickets.map(t => [t.tipo, t.key, t.priority])).toEqual([
+    ['🐞', 'LAN-2669', 'ALTA'],
+    ['✅', 'LAN-2670', 'med'],
+    ['📖', 'LAN-2678', 'baja'],
+    ['❔', 'LAN-2700', 'med'],
+  ])
+  // Y la columna nueva no se come ninguna de las de al lado.
+  expect(tickets[0]).toEqual({
+    mark: '▶',
+    tipo: '🐞',
+    key: 'LAN-2669',
+    priority: 'ALTA',
+    summary: 'La limpieza de tokens FCM muertos borra en auth y el…',
+    otherThreads: '+token-fcm',
+  })
+  expect(tickets[1]?.owner).toBe('sin asignar')
+  expect(tickets[2]?.mark).toBe('🚧')
+})
+
+/**
+ * El emoji del tipo **no se compara contra ninguna lista**: es lo que hace que
+ * un tipo nuevo en Jira salga en el panel con el emoji que le ponga el guion en
+ * vez de borrar el ticket de la mesa, que es lo que pasaría con un patrón que
+ * enumerase los emojis aceptados.
+ */
+test('un emoji de tipo que el mod no conoce se lee igual', () => {
+  const mesa = parseMesa(CON_TIPO.replace('🐞', '🦄'), 1)
+
+  expect(mesa.hilos[0]?.tickets[0]?.tipo).toBe('🦄')
+  expect(mesa.hilos[0]?.tickets).toHaveLength(4)
+})
+
+/** La mesa sin esa columna se lee como siempre y no gana un campo vacío. */
+test('la mesa que no escribe el tipo no gana el campo', () => {
+  const t = parseMesa(SAMPLE, 1).hilos[0]?.tickets[0]
+
+  expect(t?.key).toBe('LAN-2669')
+  expect(t?.priority).toBe('ALTA')
+  expect(t && 'tipo' in t).toBe(false)
+})
+
+/**
+ * Lo que la columna opcional NO puede traerse por delante: una línea que
+ * empieza por la marca y no lleva clave sigue fuera del panel. Con el tipo
+ * leído como «lo que esté delante de la clave», el riesgo es aceptar como
+ * ticket cualquier línea que empiece por `·`.
+ */
+test('una línea que empieza por la marca y no es un ticket se descarta', () => {
+  const mesa = parseMesa(
+    `## hilo (1) — hoy
+
+\`\`\`
+·  esto no es un ticket, solo una frase que empieza igual
+·  LAN-1   med  este sí
+\`\`\`
+`,
+    1,
+  )
+
+  expect(mesa.hilos[0]?.tickets.map(t => t.key)).toEqual(['LAN-1'])
+})
+
 const BACK = '/Users/x/lanzadera/backend_lanzadera'
+
 const DRIVER = '/Users/x/lanzadera/backend_lanzadera_driver'
 const HISTORY = [
   JSON.stringify({ display: 'el más viejo', timestamp: 1, project: BACK }),

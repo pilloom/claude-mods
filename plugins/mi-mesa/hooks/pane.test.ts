@@ -115,6 +115,21 @@ test('el panel pinta los tickets de la mesa en terminal y desktop', async ($, on
   }
 })
 
+/**
+ * El panel pinta el tipo del ticket entre la marca de estado y la clave, y solo
+ * si la mesa escribe esa columna: los guiones generadores de los repositorios
+ * se portan de uno en uno, así que el panel tiene que dibujar bien las dos.
+ */
+test('el panel pinta el tipo del ticket cuando la mesa lo trae', async ($, on) => {
+  ficheros(on, ROOT, MD.replace('▶  LAN-2669', '▶  🐞 LAN-2669').replace('🚧 LAN-2678', '🚧 📖 LAN-2678'))
+  abre(on)
+  await $.command.run({ command: 'mi-mesa', args: '' } as never)
+  const ui = await $.ui.mount({ plugin: 'mi-mesa', surface: 'terminal', component: 'Pane', requestId: 'mi-mesa', props: {} as never })
+  expect(await ui.find({ type: 'Text', text: /▶ 🐞 LAN-2669 ALTA/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /🚧 📖 LAN-2678 baja/ })).toBeDefined()
+  await ui.unmount()
+})
+
 test('en un repo sin docs/MI-MESA.md lo dice, con el nombre del repo', async ($, on) => {
   ficheros(on, '/x/RBSistemas/lanzadera/frontend_lanzadera')
   abre(on)

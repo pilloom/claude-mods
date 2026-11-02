@@ -2,6 +2,16 @@ export type Ticket = {
   mark: string
   key: string
   priority: string
+  /**
+   * De qué tipo es, ya como emoji: `🐞` error, `✅` tarea o subtarea, `📖`
+   * historia, `❔` un tipo que el guion no conoce.
+   *
+   * Lo trae **tal cual** lo escribió la mesa, sin traducir nada aquí: el panel
+   * pinta el emoji que haya, así que un repositorio que mañana use otro no
+   * obliga a tocar el mod. Y solo lo trae la mesa cuya columna existe: los
+   * guiones generadores se portan de uno en uno.
+   */
+  tipo?: string
   summary: string
   otherThreads: string
   /** Quién lo tiene, si no eres tú. Solo lo trae la mesa que escribe esa columna. */

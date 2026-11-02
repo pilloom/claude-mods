@@ -13,8 +13,8 @@ pasaste a Claude Code**. Y un **sonido** cuando Claude acaba de contestar.
 12 tickets · 5 hilos · generada 2026-10-08
 
 origen-lan-2501 (3) — hoy
-▶ LAN-2754 ALTA  La mesa no afirma dónde están los sin etiqueta
-· LAN-2762 med   Revisar la simetría del contrato del latido
+▶ 🐞 LAN-2754 ALTA  La mesa no afirma dónde están los sin etiqueta
+· ✅ LAN-2762 med   Revisar la simetría del contrato del latido
 ────────────────────────────────────────────────────────────────
 Últimos mensajes (4)
 12:31 una linea normal y el titulo de otro color
@@ -52,6 +52,17 @@ Las claves de ticket se leen con el prefijo que traigan (`LAN-`, `REN-`, …) y 
 con uno fijo. La primera versión pedía `LAN-\d+`, y en un repo con claves `REN-`
 no casaba ninguna línea: el panel salía **en blanco teniendo la mesa delante**,
 bien generada. Un panel vacío no distingue «no hay nada» de «no entendí nada».
+
+**De qué es cada ticket** lo dice el emoji entre la marca de estado y la clave
+—`🐞` error, `✅` tarea o subtarea, `📖` historia, `❔` un tipo que el guion no
+conoce—, y lo escribe la **mesa**, no el mod: el panel pinta el emoji que venga,
+sin tabla propia. Así un tipo nuevo en Jira no obliga a tocar el mod, y lo que
+no puede pasar —que una línea con un emoji desconocido deje de entenderse y el
+ticket **desaparezca** del panel— no pasa.
+
+La columna es **opcional** y se lee igual sin ella, porque los guiones
+generadores viven en cada repositorio y se portan de uno en uno: la mesa que
+todavía no la escribe se pinta como siempre, sin hueco.
 
 **Los mensajes** salen de `~/.claude/history.jsonl`, que es donde Claude Code
 apunta lo que escribes en el prompt, filtrado por el repositorio de la sesión.
