@@ -95,7 +95,7 @@ export type NotaInput = {
 
 declare module 'claude-code' {
   interface PluginState {
-    'mi-mesa': { mesa: Mesa; prompts: Prompt[]; notas: Notas; regen: Regen }
+    'mi-mesa': { mesa: Mesa; prompts: Prompt[]; notas: Notas; regen: Regen; vista: number }
   }
   /**
    * La herramienta que el mod registra en marcha, declarada aquí porque los

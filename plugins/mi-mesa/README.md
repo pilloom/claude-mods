@@ -10,7 +10,7 @@ pasaste a Claude Code**. Y un **sonido** cuando Claude acaba de contestar.
     Marta antes del jueves
 × • El deploy del viernes no va
  MI MESA · BACKEND_LANZADERA
-12 tickets · 5 hilos · generada 2026-10-08
+12 tickets · 5 hilos · 1-9/22 · generada 2026-10-08  ▲ ▼
 
 origen-lan-2501 (3) — hoy
 ▶ 🐞 LAN-2754 ALTA  La mesa no afirma dónde están los sin etiqueta
@@ -284,6 +284,31 @@ desaparece.
 El ancho de la barra del título y de la línea divisoria es `bodyColumns`, no el
 del viewport: con el panel acoplado al lado del transcript el viewport mide más
 y la línea se pasaba de ancho y envolvía.
+
+### La mesa que no cabe se desplaza
+
+Lo que la mesa no puede enseñar de una vez **ya no se queda fuera**: la sección
+de tickets es una **ventana** sobre la lista, y se mueve con la **rueda** del
+ratón apuntando al panel, con las **flechas** del teclado cuando el panel lo
+tiene (`ctrl+x tab`) y con las dos flechas **▲ ▼** que salen en la línea de la
+cuenta, que mueven una ventana menos una fila —la última que leíste sigue ahí
+arriba después del salto—. La línea de la cuenta dice por dónde va, un
+`12-24/31`, y va antes de la fecha: en un panel acoplado la línea se recorta por
+la derecha, y de las dos cosas la que se mira es esta. La mesa que cabe entera
+no gana ni flechas ni indicador.
+
+La ventana es **del mod y no del motor**: la sección se dibuja con
+`overflow: hidden`, así que el motor nunca ve un árbol más alto que el cuerpo
+del panel y no tiene nada que desplazar. El mod engancha `ui.scroll` del panel,
+mueve su propia ventana y contesta `{}` sin llamar a `next`, de modo que el
+cuerpo del panel se queda quieto y el post-it y los mensajes **no se van de la
+pantalla** al bajar por la mesa. Para cortar por filas, la mesa se aplana a una
+fila por línea —el rótulo de cada hilo, sus tickets y una fila en blanco entre
+hilos— en lugar de una caja por hilo: con cajas, un hilo largo o entraba entero
+o no entraba.
+
+Una mesa recién regenerada vuelve arriba; el ciclo de 15 s, que relee sin que el
+fichero haya cambiado, no toca la ventana.
 
 ## Colores
 

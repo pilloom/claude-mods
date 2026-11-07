@@ -1,5 +1,5 @@
 import { atom, read, update } from 'claude-code'
-import type { EngineInterface, Register } from 'claude-code'
+import type { EngineInterface, Register, RenderElement } from 'claude-code'
 
 import type { Mesa, Notas, Prompt, Regen } from '../types'
 import {
@@ -60,6 +60,28 @@ const mesa = atom({ plugin: 'mi-mesa', key: 'mesa' } as const, EMPTY)
 const prompts = atom({ plugin: 'mi-mesa', key: 'prompts' } as const, [] as Prompt[])
 const notas = atom({ plugin: 'mi-mesa', key: 'notas' } as const, SIN_NOTAS)
 const regen = atom({ plugin: 'mi-mesa', key: 'regen' } as const, QUIETO)
+/**
+ * Por qué fila de la mesa empieza la ventana de tickets, 0 por arriba.
+ *
+ * La mesa de un repositorio con hilos no cabe en el panel, y lo que no cabía
+ * no había manera de verlo: la sección se dibuja con `overflow: hidden`, así
+ * que el motor no ve un árbol más alto que su cuerpo y no tiene nada que
+ * desplazar. La ventana es del mod, y `ui.scroll` la mueve.
+ */
+const vista = atom({ plugin: 'mi-mesa', key: 'vista' } as const, 0)
+
+/**
+ * Cuántas filas ocupa la mesa aplanada: el rótulo de cada hilo, sus tickets y
+ * una fila en blanco entre hilos.
+ *
+ * La cuenta la necesitan los dos lados de la ventana —el que dibuja y el
+ * `ui.scroll` que la mueve— y tiene que ser la misma en los dos, que es por lo
+ * que vive aquí y no dentro del dibujado.
+ */
+function filasDeMesa(m: Mesa): number {
+  const tickets = m.hilos.reduce((n, h) => n + h.tickets.length, 0)
+  return m.hilos.length + tickets + Math.max(0, m.hilos.length - 1)
+}
 
 /**
  * El guion de la mesa que se haya puesto en `/config`, si se puso.
@@ -96,6 +118,11 @@ async function refresh($: EngineInterface): Promise<void> {
     const text = await $.fs.read(file)
     const leida = parseMesa(text, mtimeMs)
     await update($, mesa, () => ({ ...leida, repo }))
+    // Mesa nueva, ventana arriba: lo que se quiere ver de una mesa que acaba de
+    // regenerarse es su principio, y la fila 20 de la anterior no es ninguna
+    // fila de esta. Solo aquí, que es donde el fichero cambió de verdad: el
+    // ciclo de 15 s pasa por el `return` de arriba y no toca la ventana.
+    await update($, vista, () => 0)
     await refreshGuion($, leida.generador)
   } catch (err) {
     await update($, mesa, m => ({ ...m, repo, error: String(err) }))
@@ -555,12 +582,38 @@ export const register: Register = (on, options) => {
     return res
   })
 
+  /**
+   * La rueda y las flechas mueven la ventana de la mesa, no el cuerpo del panel.
+   *
+   * Se contesta `{}` sin llamar a `next`: el cuerpo del panel se queda donde
+   * está —su árbol cabe entero, no hay nada que el motor pueda desplazar— y lo
+   * que se mueve es la ventana del mod, que el dibujado lee del atom. La rueda
+   * funciona apuntando al panel; las flechas, cuando lo tiene el teclado
+   * (ctrl+x tab).
+   *
+   * El tope de aquí es de brocha gorda —una fila menos que la mesa entera—
+   * porque este hook no sabe el alto de la ventana: el reparto del cuerpo
+   * depende del ancho y de lo que ocupe el post-it, y `ui.scroll` no trae
+   * ninguno de los dos. El recorte exacto lo hace el dibujado, que sí los
+   * tiene, así que pasarse por abajo no enseña una mesa vacía; como mucho
+   * cuesta unos golpes de rueda de vuelta.
+   */
+  on('ui.scroll', { requestId: PANE }, async ($, e) => {
+    const m = await read($, mesa)
+    const tope = Math.max(0, filasDeMesa(m) - 1)
+    const prev = await read($, vista)
+    const desde = Math.min(tope, Math.max(0, Math.min(prev, tope) + e.by))
+    if (desde !== prev) await update($, vista, () => desde)
+    return {}
+  })
+
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
     const { Box, Button, Text } = $.ui.resolve(e)
     const m = await read($, mesa)
     const ultimos = await read($, prompts)
     const post = await read($, notas)
     const reg = await read($, regen)
+    const mirilla = await read($, vista)
     const total = m.hilos.reduce((n, hilo) => n + hilo.tickets.length, 0)
     // El ancho es el del cuerpo del Pane, que es lo que una barra o una regla
     // de ancho completo tiene que medir: el del viewport es el de la pantalla,
@@ -612,6 +665,76 @@ export const register: Register = (on, options) => {
     const arriba = parte ? libres - abajo : undefined
     // La línea y el rótulo se quedan dos de las filas del cuarto de abajo.
     const caben = parte ? Math.max(1, abajo - 2) : ULTIMOS
+
+    /**
+     * La mesa, aplanada a una fila por línea: el rótulo de cada hilo, sus
+     * tickets y una fila en blanco entre hilos.
+     *
+     * Aplanada porque la ventana se corta por filas, y con cada hilo dentro de
+     * su caja —con su `marginTop`— no hay manera de cortar por la mitad de un
+     * hilo largo: o entra entero o no entra. La fila en blanco hace el hueco
+     * que hacía el margen, y así además se puede desplazar por ella.
+     */
+    const filas: RenderElement[] = []
+    // El índice no se llama `h`: `h` es la función con la que compila el JSX
+    // —un global del módulo de hooks— y una variable con ese nombre la tapa
+    // dentro del callback, así que no se dibuja nada.
+    m.hilos.forEach((hilo, i) => {
+      if (i > 0) filas.push(<Text key={`blanco-${i}`}>{' '}</Text>)
+      filas.push(
+        <Text key={`hilo-${i}`} color="cyan">
+          {cut(hilo.title, width)}
+        </Text>,
+      )
+      for (const t of hilo.tickets) {
+        /* El tipo va entre la marca de estado y la clave, y solo si la mesa lo
+           escribe: así las dos cosas que se leen de un vistazo —en qué estado
+           está y de qué es— quedan juntas al principio de la línea, y el
+           resumen sigue empezando donde siempre en las mesas que todavía no
+           traen la columna.
+           Le quita tres al hueco del resumen y no dos: el emoji ocupa dos
+           columnas del terminal y `cut` cuenta caracteres, igual que el
+           recorte del post-it. Pasarse de ancho envuelve la línea y descoloca
+           la lista entera —y, ahora, descuadra la ventana—, así que se peca de
+           corto. */
+        filas.push(
+          <Text key={t.key} dimColor={t.mark === '·'}>
+            {`${t.mark} ${t.tipo ? `${t.tipo} ` : ''}${t.key} ${t.priority.padEnd(4)} ${cut(t.summary, Math.max(10, width - (t.tipo ? 23 : 20)))}${t.owner ? ` → ${t.owner}` : ''}`}
+          </Text>,
+        )
+      }
+    })
+    // Lo que la cabecera de la sección se queda antes de las filas: la barra
+    // del título, la línea de la cuenta y la de cada error que haya.
+    const cabecera = 2 + (m.error ? 1 : 0) + (reg.error ? 1 : 0)
+    // Sin filas conocidas —un test, una superficie que no manda las props— no
+    // hay reparto y no hay ventana: la mesa se pinta entera, como siempre.
+    const visibles = arriba === undefined ? filas.length : Math.max(1, arriba - cabecera)
+    const desde = Math.min(Math.max(0, mirilla), Math.max(0, filas.length - visibles))
+    const ventana = filas.slice(desde, desde + visibles)
+    // Dónde está la ventana, y solo cuando sobra mesa: un `12-20/40` en la
+    // línea de la cuenta. Sin él, una mesa cortada no se distingue de una mesa
+    // que se acaba ahí, que es justo lo que pasaba antes.
+    //
+    // Va antes de la fecha y no al final: en un panel acoplado la línea no cabe
+    // entera y se recorta por la derecha, así que lo último que se escribe es
+    // lo primero que se pierde, y de las dos cosas la que se mira es esta.
+    const sobra = ventana.length < filas.length
+    const asoma = sobra ? ` · ${desde + 1}-${desde + ventana.length}/${filas.length}` : ''
+    /** Hasta dónde puede bajar la ventana sin dejar filas en blanco al final. */
+    const tope = Math.max(0, filas.length - visibles)
+    /**
+     * Lo que mueven las flechas: una ventana menos una fila.
+     *
+     * Menos una para que la última que se leyó siga ahí arriba después del
+     * salto, que es cómo se lee una lista larga sin perder el hilo.
+     */
+    const pagina = Math.max(1, visibles - 1)
+    const mover = (n: number) => () => {
+      // Sin `await` y con el fallo tragado, como la equis del post-it: lo que se
+      // dibuja no espera a un botón.
+      void update($, vista, v => Math.min(tope, Math.max(0, Math.min(v, tope) + n))).catch(() => {})
+    }
 
     return (
       <Box flexDirection="column">
@@ -717,30 +840,46 @@ export const register: Register = (on, options) => {
               </Button>
             ) : null}
           </Box>
-          <Text dimColor>
-            {`${total} tickets · ${m.hilos.length} hilos · generada ${m.generated}`}
-          </Text>
+          {/* La línea de la cuenta, y en su borde las dos flechas cuando sobra
+              mesa: la rueda y las flechas del teclado mueven la ventana, pero
+              un panel no enseña ninguna de las dos cosas, y un control que se
+              ve se encuentra sin saber el atajo. Van en el mismo `plain` que
+              la `↻` del título, y desaparecen con la mesa que cabe entera. */}
+          <Box key="cuenta" flexDirection="row">
+            <Text dimColor>
+              {cut(
+                `${total} tickets · ${m.hilos.length} hilos${asoma} · generada ${m.generated}`,
+                // Lo que las dos flechas se quedan de la fila: el glifo de cada
+                // una y el espacio que la separa de la cuenta.
+                Math.max(10, width - (sobra ? 4 : 0)),
+              )}
+            </Text>
+            {sobra ? (
+              <Button
+                key="subir"
+                plain
+                label="Subir la mesa"
+                hover={{ color: 'yellow' }}
+                onPress={mover(-pagina)}
+              >
+                <Text dimColor={desde === 0}>{' ▲'}</Text>
+              </Button>
+            ) : null}
+            {sobra ? (
+              <Button
+                key="bajar"
+                plain
+                label="Bajar la mesa"
+                hover={{ color: 'yellow' }}
+                onPress={mover(pagina)}
+              >
+                <Text dimColor={desde >= tope}>{' ▼'}</Text>
+              </Button>
+            ) : null}
+          </Box>
           {m.error ? <Text color="red">{cut(m.error, width)}</Text> : null}
           {reg.error ? <Text color="red">{cut(reg.error, width)}</Text> : null}
-          {m.hilos.map(hilo => (
-            <Box key={hilo.title} flexDirection="column" marginTop={1}>
-              <Text color="cyan">{cut(hilo.title, width)}</Text>
-              {hilo.tickets.map(t => (
-                /* El tipo va entre la marca de estado y la clave, y solo
-                   si la mesa lo escribe: así las dos cosas que se leen de un
-                   vistazo —en qué estado está y de qué es— quedan juntas al
-                   principio de la línea, y el resumen sigue empezando donde
-                   siempre en las mesas que todavía no traen la columna.
-                   Le quita tres al hueco del resumen y no dos: el emoji ocupa
-                   dos columnas del terminal y `cut` cuenta caracteres, igual
-                   que el recorte del post-it. Pasarse de ancho envuelve la
-                   línea y descoloca la lista entera, así que se peca de corto. */
-                <Text key={t.key} dimColor={t.mark === '·'}>
-                  {`${t.mark} ${t.tipo ? `${t.tipo} ` : ''}${t.key} ${t.priority.padEnd(4)} ${cut(t.summary, Math.max(10, width - (t.tipo ? 23 : 20)))}${t.owner ? ` → ${t.owner}` : ''}`}
-                </Text>
-              ))}
-            </Box>
-          ))}
+          {ventana}
         </Box>
         <Box flexDirection="column" height={abajo || undefined} overflow="hidden" flexShrink={0}>
           {/* Una raya fina, no una fila con el fondo pintado: esa salía gruesa.

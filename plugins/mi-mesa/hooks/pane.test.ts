@@ -787,3 +787,95 @@ test('mientras corre, el aviso entra en la barra y se queda con el hueco', async
   expect(await ui.find({ type: 'Button', key: 'regenerar' })).toBeUndefined()
   await ui.unmount()
 })
+
+/** Una mesa de un hilo con `n` tickets, que es lo que no cabe en el panel. */
+function mesaLarga(n: number): string {
+  const filas = Array.from(
+    { length: n },
+    (_, i) => `▶  LAN-${3000 + i}  ALTA Lo que toca en el ticket ${3000 + i}  +otro-hilo`,
+  )
+  return [
+    '> 🤖 **Generado** por `scripts/qa/listar-mi-mesa.js` el 2026-10-07, para **X**.',
+    '',
+    '## hilo-largo (30) — hoy',
+    '',
+    '```',
+    ...filas,
+    '```',
+  ].join('\n')
+}
+
+test('la mesa que no cabe se corta en una ventana y dice por dónde va', async ($, on) => {
+  ficheros(on, ROOT, mesaLarga(30))
+  sinGit(on)
+  abre(on)
+  await $.command.run({ command: 'mi-mesa', args: '' } as never)
+  const ui = await $.ui.mount({
+    plugin: 'mi-mesa',
+    surface: 'terminal',
+    component: 'Pane',
+    // 20 filas de cuerpo: la mesa trae 31 (el rótulo del hilo y 30 tickets).
+    props: { scroll: { offset: 0, bodyRows: 20 } } as never,
+    requestId: 'mi-mesa',
+  })
+  // Lo de arriba se pinta; lo de abajo, no: la ventana empieza por el principio.
+  expect(await ui.find({ type: 'Text', text: /LAN-3000/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /LAN-3029/ })).toBeUndefined()
+  // Y se dice, que una mesa cortada no se distingue de una que se acaba ahí.
+  expect(await ui.find({ type: 'Text', text: / 1-\d+\/31 / })).toBeDefined()
+  await ui.unmount()
+})
+
+test('las flechas mueven la ventana de la mesa, no el cuerpo del panel', async ($, on) => {
+  ficheros(on, ROOT, mesaLarga(30))
+  sinGit(on)
+  abre(on)
+  await $.command.run({ command: 'mi-mesa', args: '' } as never)
+  const props = { scroll: { offset: 0, bodyRows: 20 } } as never
+  const ui = await $.ui.mount({
+    plugin: 'mi-mesa',
+    surface: 'terminal',
+    component: 'Pane',
+    props,
+    requestId: 'mi-mesa',
+  })
+  // Arriba del todo no hay nada que subir, y las dos flechas están puestas.
+  expect(await ui.find({ type: 'Button', key: 'subir' })).toBeDefined()
+  await ui.press({ key: 'bajar' })
+  await ui.redraw(props)
+  // Lo que estaba fuera entra, y lo de arriba sale: la ventana se movió.
+  expect(await ui.find({ type: 'Text', text: /LAN-3012/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /LAN-3000/ })).toBeUndefined()
+  // Otra flecha más y se llega al final, sin pasarse: la última fila es la 31
+  // de 31, y de ahí no baja por mucho que se pulse.
+  await ui.press({ key: 'bajar' })
+  await ui.press({ key: 'bajar' })
+  await ui.redraw(props)
+  expect(await ui.find({ type: 'Text', text: /LAN-3029/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /-31\/31 / })).toBeDefined()
+  // Y vuelve: subir deja otra vez el principio de la mesa.
+  await ui.press({ key: 'subir' })
+  await ui.press({ key: 'subir' })
+  await ui.press({ key: 'subir' })
+  await ui.redraw(props)
+  expect(await ui.find({ type: 'Text', text: /LAN-3000/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: / 1-\d+\/31 / })).toBeDefined()
+  await ui.unmount()
+})
+
+test('la mesa que cabe entera no gana flechas ni indicador', async ($, on) => {
+  ficheros(on, ROOT, MD)
+  sinGit(on)
+  abre(on)
+  await $.command.run({ command: 'mi-mesa', args: '' } as never)
+  const ui = await $.ui.mount({
+    plugin: 'mi-mesa',
+    surface: 'terminal',
+    component: 'Pane',
+    props: { scroll: { offset: 0, bodyRows: 40 } } as never,
+    requestId: 'mi-mesa',
+  })
+  expect(await ui.find({ type: 'Button', key: 'bajar' })).toBeUndefined()
+  expect(await ui.find({ type: 'Text', text: /\d+-\d+\/\d+/ })).toBeUndefined()
+  await ui.unmount()
+})

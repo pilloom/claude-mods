@@ -1,5 +1,34 @@
 # Changelog
 
+## [1.5.0] — 2026-11-06
+
+### La mesa que no cabe se desplaza
+
+- La sección de tickets es ahora una **ventana** sobre la lista: lo que no cabía
+  en el panel se quedaba fuera de la pantalla sin manera de llegar a él. Se
+  mueve con la rueda apuntando al panel, con las flechas del teclado cuando el
+  panel lo tiene (`ctrl+x tab`) y con las dos flechas **▲ ▼** nuevas en la línea
+  de la cuenta, de una ventana menos una fila: la última línea que leíste sigue
+  ahí arriba después del salto.
+- La línea de la cuenta dice **por dónde va** —un `12-24/31`— y lo dice antes de
+  la fecha: en un panel acoplado esa línea se recorta por la derecha, así que lo
+  último que se escribe es lo primero que se pierde. La mesa que cabe entera no
+  gana ni flechas ni indicador.
+- La ventana es **del mod**, no del motor: la sección se dibuja con
+  `overflow: hidden` y el motor nunca ve un árbol más alto que el cuerpo del
+  panel, así que no tiene nada que desplazar. El mod engancha `ui.scroll` del
+  panel y contesta `{}` sin llamar a `next`, de modo que el cuerpo se queda
+  quieto y **el post-it y los mensajes no se van de la pantalla** al bajar por la
+  mesa.
+- Para poder cortar por filas, la mesa se **aplana** a una fila por línea —el
+  rótulo de cada hilo, sus tickets y una fila en blanco entre hilos— en lugar de
+  una caja por hilo: con cajas, un hilo largo o entraba entero o no entraba.
+  El tope del `ui.scroll` es de brocha gorda, una fila menos que la mesa entera,
+  porque ahí no se conocen ni el ancho ni lo que ocupa el post-it; el recorte
+  exacto lo hace el dibujado, que sí los tiene.
+- Una mesa recién regenerada vuelve arriba; el ciclo de 15 s, que relee sin que
+  el fichero haya cambiado, no toca la ventana.
+
 ## [1.4.0] — 2026-11-02
 
 ### El tipo del ticket, en un emoji
