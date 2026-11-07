@@ -847,12 +847,17 @@ export const register: Register = (on, options) => {
               la `↻` del título, y desaparecen con la mesa que cabe entera. */}
           <Box key="cuenta" flexDirection="row">
             <Text dimColor>
+              {/* Rellenada hasta el borde, como el título con su `↻`: así las
+                  flechas se van al lado derecho de la fila en lugar de quedarse
+                  pegadas al final de la cuenta, donde la línea cambia de largo
+                  —la fecha, el número de tickets— y las flechas bailaban de
+                  sitio en cada regeneración.
+                  Lo que se les reserva son cuatro columnas: el glifo de cada una
+                  y el espacio que la separa de lo de al lado. */}
               {cut(
                 `${total} tickets · ${m.hilos.length} hilos${asoma} · generada ${m.generated}`,
-                // Lo que las dos flechas se quedan de la fila: el glifo de cada
-                // una y el espacio que la separa de la cuenta.
                 Math.max(10, width - (sobra ? 4 : 0)),
-              )}
+              ).padEnd(sobra ? Math.max(0, width - 4) : 0)}
             </Text>
             {sobra ? (
               <Button

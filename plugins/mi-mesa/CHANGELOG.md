@@ -8,8 +8,10 @@
   en el panel se quedaba fuera de la pantalla sin manera de llegar a él. Se
   mueve con la rueda apuntando al panel, con las flechas del teclado cuando el
   panel lo tiene (`ctrl+x tab`) y con las dos flechas **▲ ▼** nuevas en la línea
-  de la cuenta, de una ventana menos una fila: la última línea que leíste sigue
-  ahí arriba después del salto.
+  de la cuenta, pegadas a su borde derecho como la `↻` del título, de una
+  ventana menos una fila: la última línea que leíste sigue ahí arriba después
+  del salto. La línea se rellena hasta el borde para que las flechas no bailen
+  de sitio cada vez que cambian el número de tickets o la fecha.
 - La línea de la cuenta dice **por dónde va** —un `12-24/31`— y lo dice antes de
   la fecha: en un panel acoplado esa línea se recorta por la derecha, así que lo
   último que se escribe es lo primero que se pierde. La mesa que cabe entera no

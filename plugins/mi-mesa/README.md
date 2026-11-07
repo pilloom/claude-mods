@@ -10,7 +10,7 @@ pasaste a Claude Code**. Y un **sonido** cuando Claude acaba de contestar.
     Marta antes del jueves
 × • El deploy del viernes no va
  MI MESA · BACKEND_LANZADERA
-12 tickets · 5 hilos · 1-9/22 · generada 2026-10-08  ▲ ▼
+12 tickets · 5 hilos · 1-9/22 · generada 2026-10-08          ▲ ▼
 
 origen-lan-2501 (3) — hoy
 ▶ 🐞 LAN-2754 ALTA  La mesa no afirma dónde están los sin etiqueta
@@ -291,7 +291,9 @@ Lo que la mesa no puede enseñar de una vez **ya no se queda fuera**: la secció
 de tickets es una **ventana** sobre la lista, y se mueve con la **rueda** del
 ratón apuntando al panel, con las **flechas** del teclado cuando el panel lo
 tiene (`ctrl+x tab`) y con las dos flechas **▲ ▼** que salen en la línea de la
-cuenta, que mueven una ventana menos una fila —la última que leíste sigue ahí
+cuenta, pegadas a su borde derecho como la `↻` del título —la línea se rellena
+hasta el borde, que si no las flechas bailan de sitio cada vez que cambia el
+número de tickets o la fecha—, y que mueven una ventana menos una fila —la última que leíste sigue ahí
 arriba después del salto—. La línea de la cuenta dice por dónde va, un
 `12-24/31`, y va antes de la fecha: en un panel acoplado la línea se recorta por
 la derecha, y de las dos cosas la que se mira es esta. La mesa que cabe entera
