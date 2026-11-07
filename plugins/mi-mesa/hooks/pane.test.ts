@@ -879,3 +879,137 @@ test('la mesa que cabe entera no gana flechas ni indicador', async ($, on) => {
   expect(await ui.find({ type: 'Text', text: /\d+-\d+\/\d+/ })).toBeUndefined()
   await ui.unmount()
 })
+
+/**
+ * La mesa con el marcador: una fila más en la cabecera de la sección, con las
+ * cifras de la semana del Team y sin nombres.
+ */
+const CON_PULSO = [
+  MD,
+  '',
+  '## Pulso de la semana',
+  '',
+  '```',
+  'tramo: MAR-LUN',
+  'abren: 62',
+  'cierran: 57',
+  'subtareas: 31',
+  'tuyos: 18',
+  'puesto: 2',
+  'personas: 9',
+  '```',
+].join('\n')
+
+test('el panel pinta el marcador de la semana cuando la mesa lo trae', async ($, on) => {
+  ficheros(on, ROOT, CON_PULSO)
+  sinGit(on)
+  abre(on)
+  await $.command.run({ command: 'mi-mesa', args: '' } as never)
+  const ui = await $.ui.mount({
+    plugin: 'mi-mesa',
+    surface: 'terminal',
+    component: 'Pane',
+    props: { bodyColumns: 80, scroll: { offset: 0, bodyRows: 40 } } as never,
+    requestId: 'mi-mesa',
+  })
+  expect(await ui.find({ type: 'Text', text: /SEMANA MAR-LUN/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: '+ 62' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: '- 57' })).toBeDefined()
+  // La mesa las cuenta y la fila no las pinta.
+  expect(await ui.find({ type: 'Text', text: /subt/ })).toBeUndefined()
+  expect(await ui.find({ type: 'Text', text: '▼5' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: 'tú 18 · 2.º/9' })).toBeDefined()
+  // La sección del pulso no es un hilo: no entra en la cuenta de la mesa.
+  expect(await ui.find({ type: 'Text', text: /2 tickets · 2 hilos/ })).toBeDefined()
+  // Y la mesa sigue puesta debajo.
+  expect(await ui.find({ type: 'Text', text: /▶ LAN-2669 ALTA/ })).toBeDefined()
+  await ui.unmount()
+})
+
+/** La mesa cuyo guion todavía no escribe la sección se pinta como siempre. */
+test('sin la sección del pulso el panel no deja la fila en blanco', async ($, on) => {
+  ficheros(on, ROOT, MD)
+  sinGit(on)
+  abre(on)
+  await $.command.run({ command: 'mi-mesa', args: '' } as never)
+  const ui = await $.ui.mount({
+    plugin: 'mi-mesa',
+    surface: 'terminal',
+    component: 'Pane',
+    props: { bodyColumns: 80, scroll: { offset: 0, bodyRows: 40 } } as never,
+    requestId: 'mi-mesa',
+  })
+  expect(await ui.find({ type: 'Text', text: /SEMANA/ })).toBeUndefined()
+  expect(await ui.find({ type: 'Text', text: /▶ LAN-2669 ALTA/ })).toBeDefined()
+  await ui.unmount()
+})
+
+/**
+ * El marcador se queda una fila de la cabecera, así que la ventana de la mesa
+ * tiene una menos: contarla de menos corre la ventana y la última línea se
+ * pierde por debajo del corte sin que nada lo diga.
+ *
+ * Las dos mesas se comparan en un solo test y reescribiendo el fichero con
+ * `pon`, que es como lo reescribe el guion de verdad: los hooks del disco en
+ * memoria se registran una vez por test, antes de la primera llamada a `$`.
+ */
+test('el marcador le cuesta a la mesa una fila, y la cuenta lo dice', async ($, on) => {
+  const lineas = ['> 🤖 **Generado** por `scripts/qa/listar-mi-mesa.js` el 2026-10-07, para **X**.', '']
+  for (let i = 0; i < 6; i++) {
+    lineas.push(`## hilo-${i} (1) — hoy`, '', '```', `·  LAN-${100 + i}  med  Lo que sea del hilo ${i}`, '```', '')
+  }
+  const base = lineas.join('\n')
+  const disco = ficheros(on, ROOT, base)
+  sinGit(on)
+  abre(on)
+  /** Dónde va la ventana de la mesa, tal como la línea de la cuenta lo dice. */
+  const ventana = async (): Promise<string> => {
+    await $.command.run({ command: 'mi-mesa', args: '' } as never)
+    const ui = await $.ui.mount({
+      plugin: 'mi-mesa',
+      surface: 'terminal',
+      component: 'Pane',
+      // 16 filas de cuerpo: la mesa se queda 12 y no caben sus 17 líneas.
+      props: { bodyColumns: 80, scroll: { offset: 0, bodyRows: 16 } } as never,
+      requestId: 'mi-mesa',
+    })
+    const cuenta = await ui.find({ type: 'Text', text: /\d+-\d+\/\d+/ })
+    const texto = typeof cuenta?.text === 'string' ? cuenta.text : ''
+    await ui.unmount()
+    return /(\d+-\d+\/\d+)/.exec(texto)?.[1] ?? ''
+  }
+  expect(await ventana()).toBe('1-10/17')
+  pon(disco, `${ROOT}/docs/MI-MESA.md`, `${base}\n## Pulso\n\n\`\`\`\nabren: 62\ncierran: 57\n\`\`\`\n`)
+  expect(await ventana()).toBe('1-9/17')
+})
+
+/**
+ * Las dos líneas de cifras van **en negritas**, y es una decisión que se pierde
+ * en silencio: con una en gris y la otra en color no se leen como el par que
+ * son, y nada falla al volver a apagarlas.
+ *
+ * El `dimColor` **no** vuelve con ellas: `bold` y `dimColor` se pelean —uno baja
+ * la intensidad y el otro la sube— y cada terminal resuelve ese par a su
+ * manera, así que en el panel no se usan juntos en ninguna parte.
+ */
+test('la cuenta y el marcador van en negritas, y sin dimColor', async ($, on) => {
+  ficheros(on, ROOT, CON_PULSO)
+  sinGit(on)
+  abre(on)
+  await $.command.run({ command: 'mi-mesa', args: '' } as never)
+  const ui = await $.ui.mount({
+    plugin: 'mi-mesa',
+    surface: 'terminal',
+    component: 'Pane',
+    props: { bodyColumns: 80, scroll: { offset: 0, bodyRows: 40 } } as never,
+    requestId: 'mi-mesa',
+  })
+  for (const texto of [/2 tickets · 2 hilos/, /SEMANA MAR-LUN/, '+ 62', '- 57', '▼5', 'tú 18 · 2.º/9'] as const) {
+    const nodo = await ui.find({ type: 'Text', text: texto })
+    expect(nodo, `falta la línea ${texto}`).toBeDefined()
+    const props = (nodo?.props ?? {}) as { bold?: unknown; dimColor?: unknown }
+    expect(props.bold, `${texto} tiene que ir en negritas`).toBe(true)
+    expect(props.dimColor, `${texto} no puede ir apagada`).not.toBe(true)
+  }
+  await ui.unmount()
+})

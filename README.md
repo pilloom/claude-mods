@@ -27,7 +27,7 @@ El repositorio es privado: hace falta que tu `git` tenga acceso a `pilloom`.
 
 | Mod | Qué hace |
 |-----|----------|
-| [`mi-mesa`](plugins/mi-mesa/) | Un panel con el post-it de `NOTAS.md` —que se escribe pidiéndolo o con `/nota`—, tus tickets abiertos agrupados por hilo y los últimos mensajes que le pasaste a Claude Code; y un sonido al acabar el turno. |
+| [`mi-mesa`](plugins/mi-mesa/) | Un panel con el post-it de `NOTAS.md` —que se escribe pidiéndolo o con `/nota`—, tus tickets abiertos agrupados por hilo con el marcador de la semana —lo que se abre contra lo que se cierra— y los últimos mensajes que le pasaste a Claude Code; y un sonido al acabar el turno. |
 
 ## Añadir un mod nuevo
 

@@ -1,8 +1,9 @@
 # mi-mesa
 
-Un panel con **tu mesa de trabajo** —los tickets abiertos agrupados por hilo—,
-arriba **el post-it de `NOTAS.md`** y debajo **los últimos mensajes que le
-pasaste a Claude Code**. Y un **sonido** cuando Claude acaba de contestar.
+Un panel con **tu mesa de trabajo** —los tickets abiertos agrupados por hilo y
+**el marcador de la semana**, lo que se abre contra lo que se cierra—, arriba
+**el post-it de `NOTAS.md`** y debajo **los últimos mensajes que le pasaste a
+Claude Code**. Y un **sonido** cuando Claude acaba de contestar.
 
 ```
  NOTAS
@@ -11,6 +12,7 @@ pasaste a Claude Code**. Y un **sonido** cuando Claude acaba de contestar.
 × • El deploy del viernes no va
  MI MESA · BACKEND_LANZADERA
 12 tickets · 5 hilos · 1-9/22 · generada 2026-10-08          ▲ ▼
+SEMANA MAR-LUN  + 64 ▏- 57 ▏▼7 ▏tú 18 · 2.º/9
 
 origen-lan-2501 (3) — hoy
 ▶ 🐞 LAN-2754 ALTA  La mesa no afirma dónde están los sin etiqueta
@@ -76,6 +78,157 @@ al host y no mensajes, y los mensajes de otros repos. El filtro por repositorio
 es **exacto, no por prefijo**: `backend_lanzadera` es prefijo de
 `backend_lanzadera_driver`, y filtrar por prefijo mezclaría dos de los repos.
 
+## El marcador de la semana
+
+Una fila debajo de la cuenta con **lo que entra contra lo que sale**:
+
+```
+12 tickets · 5 hilos · 1-9/22 · generada 2026-11-07          ▲ ▼
+SEMANA MAR-LUN  + 64 ▏- 57 ▏▼7 ▏tú 18 · 2.º/9
+```
+
+Contesta de un vistazo lo único que mueve a cerrar —si se cierra más de lo que
+se abre— sin abrir Jira.
+
+**Un `+` lo que entra y un `-` lo que se termina**, no las palabras: dos glifos
+de una columna que se leen sin leerlos, y son **el mismo par**, así que el ojo
+los empareja sin que nada se lo explique. El guion es el de teclado y no el menos
+tipográfico `−`: es el par exacto del `+` y está en todas las monoespaciadas,
+mientras que el `−` se pinta como un cuadrito en las que no lo traen.
+
+El neto es una **flecha con su color**: `▲16` verde cuando se cierra más de lo
+que entra, `▼7` rojo cuando no. Flecha y no el signo del neto porque los dos
+signos ya están ocupados a su izquierda: un `−7` detrás de un `+ 64 ▏- 57` es el
+tercer signo de la fila.
+
+🔴 **Las subtareas no se pintan**, aunque la mesa las cuente. Siguen fuera de las
+dos cifras que se comparan —contarlas premia a quien desglosa— y quedan en el
+fichero, en `subtareas`, para quien lo abra. En la fila eran un tercer número que
+había que explicar cada vez, y la fila existe para no tener que explicar nada.
+
+⚠️ **Y la palomita que se pediría primero, `✔️`, no sirve.** Son **dos**
+caracteres —`✔` más un selector de variación invisible— y el selector no cambia
+la tabla de anchos: solo le pide al terminal que lo pinte como emoji de color.
+Así que el recorte dice 1 columna, el motor que monta la fila dice 1 y el
+terminal pinta **2**. Esa columna de desacuerdo no se arregla desde el mod,
+porque quien rellena y recorta la fila es el motor. El `✓` no tiene el problema
+—los tres cuentan 1— y el `✅` tampoco —la tabla lo marca ancho y los tres
+cuentan 2—, pero ese choca con el emoji de tipo que la mesa ya pinta en las
+líneas de ticket.
+
+Es **flujo, no existencias**: `abren` son los tickets *creados* en el tramo y
+`cierran` los *cerrados* en ese mismo tramo. No son los 12 que hay encima de la
+mesa —esa es la línea de arriba—, que es la confusión natural y la que haría
+inútil el marcador: contra una existencia no se sabe si vas ganando.
+
+**Las subtareas no entran en la cuenta que compara**, van a su lado como
+`+31 subt.`. Sin esa resta el marcador premia a quien desglosa: en LAN, 9 de
+cada 10 cierres recientes son subtareas de una misma persona, y un tablero que
+se ve enseña rápido a partir el trabajo en nueve trozos. No se esconden —cerrar
+una subtarea es trabajo— pero no compiten con un error cerrado.
+
+Las cifras son del **Team entero y sin nombres**. Lo tuyo sale aparte y tu sitio
+como un número, `tú 18 · 2.º/9`: la comparación motiva y la lista de quién va
+último señala, y para subir no hace falta saber quién está debajo.
+
+⚠️ «Quién lo cerró» es el **asignado al cerrarse**, que es lo único que Jira
+guarda: no hay campo de quién resolvió. Si alguien cierra un ticket tuyo te lo
+cuenta a ti, y si te lo reasignan el último día se lo lleva el último. Es un
+proxy bueno, pero es un proxy.
+
+### Lo que el guion tiene que escribir
+
+El panel **no habla con Jira**: lee ficheros. Las cifras las escribe el guion
+generador de cada repositorio en una sección `## Pulso` de `docs/MI-MESA.md`,
+con un `clave: valor` por línea:
+
+````markdown
+## Pulso de la semana
+
+```
+tramo: MAR-LUN
+abren: 62
+cierran: 57
+subtareas: 31
+tuyos: 18
+puesto: 2
+personas: 9
+```
+````
+
+Solo `abren` y `cierran` son obligatorias, y **la mesa que no traiga la sección
+se pinta como siempre, sin hueco**: es la regla de todas las columnas que se han
+ido portando de un repositorio a otro, porque los guiones viven en cada repo y
+se tocan de uno en uno. Media cifra tampoco es un marcador: un «cierran 57»
+solo no contesta la pregunta, así que sin las dos no se pinta la fila.
+
+Las cifras se leen **solo dentro de esa sección**, que acaba donde empieza la
+siguiente `##`. Leyendo por clave en todo el fichero, cualquier `tuyos: 3` de la
+prosa se convertiría en un dato del marcador. Y una cifra imposible —un
+`abren: -3`, un `puesto: 0`— se descarta en vez de pintarse: un marcador que
+enseña un dato que no puede ser se cree igual.
+
+### La semana va de martes a lunes
+
+Porque **el lunes es el día de las revisiones**: lo que se cierra ese día es la
+cosecha de la semana que acaba, no el arranque de la siguiente. Con el corte en
+lunes —o en domingo— esos cierres se le apuntaban a la semana nueva y las dos
+salían mal: la que acababa parecía floja y la que empezaba, disparada.
+
+El `tramo` lo escribe el guion y el panel lo pinta tal cual, sin calendario
+propio: un jueves es `MAR-JUE` y la semana acabada es `MAR-LUN`. Quien sabe por
+dónde va es quien consultó Jira — **y por eso cambiar el día en que abre la
+semana no toca el mod**, solo el guion de cada repositorio. Va en tres letras y
+no en una porque en estas mesas el miércoles es `X` justamente porque `M` ya es
+martes: `MAR-JUE` no se puede leer de dos maneras.
+
+⚠️ Lo que el guion **no** debe usar es el `startOfWeek()` de Jira. El primer día
+de la semana es un **ajuste de la instancia**, no una constante —y ninguna
+instancia abre la semana en martes—; valía ya cuando el corte coincidía con uno
+posible, porque el día que alguien lo mueva el marcador cuenta otro tramo y nada
+lo delata. Se comprobó, y el experimento salió **empatado**: `startOfWeek()` y la
+fecha escrita dieron las dos 64 porque ese domingo se crearon 0 tickets, que es
+justo la clase de empate que esconde el fallo hasta el primer fin de semana con
+trabajo. El guion calcula el día que abre y pasa la fecha:
+
+```
+created >= "2026-11-03"
+```
+
+### Las dos líneas de cifras van en negritas
+
+La de la cuenta y la del marcador, las dos. Con una en gris apagado y la otra en
+color no se leían como el par que son: son lo que se mira de un vistazo debajo
+del título, y lo que distingue una cifra de otra es **el color, no el peso** —
+ámbar el `+` de lo que entra, verde el `-` de lo que se termina, la flecha del
+neto del color de su sentido, y lo tuyo sin color, que es lo único de la línea
+que habla de ti—.
+
+El rótulo y los separadores van en negritas y **sin color**, que es lo que los
+deja detrás de las cifras sin apagarlos: `bold` y `dimColor` se pelean —uno baja
+la intensidad y el otro la sube— y cada terminal resuelve ese par a su manera,
+así que en el panel **no se usan juntos en ninguna parte**. Por eso la flecha que
+no puede moverse **pierde las negritas** en lugar de ganar un apagado: dice lo
+mismo quitando peso.
+
+### Lo que le cuesta a la mesa
+
+Una fila, y la mesa la paga: el reparto la cuenta en la cabecera de la sección,
+así que la ventana pasa de `1-10/17` a `1-9/17`. Contarla de menos corría la
+ventana y la última línea se perdía por debajo del corte sin que nada lo dijera.
+
+En un panel estrecho lo que no cabe se cae **por la derecha y por grupos
+enteros** —las dos cifras que se comparan, el neto que resume, lo tuyo—, que es
+lo que deja la línea sin un `▏` colgando apuntando a un dato que no está. Donde
+no cabe ni la primera cifra no se pinta la fila: ocuparía una fila de la mesa
+para no decir nada.
+
+El `✅` se mide como **dos columnas**, que es lo que ocupa en el terminal aunque
+para JavaScript sea un carácter. Midiendo por caracteres la fila se pasa de
+ancho justo en el panel acoplado, y una fila que envuelve descuadra la ventana
+de la mesa entera, que reparte filas contando una por ticket: es el mismo fallo
+que ya costó la columna del tipo.
+
 ## Regenerar la mesa
 
 El fichero lo escribe el guion de cada repositorio, y el panel pinta una **`↻`**
@@ -89,7 +242,9 @@ sesión:
 
 Va ahí y no en la línea de la fecha —donde estuvo primero— porque dentro de la
 barra sale **en negritas y sobre su fondo**, y se encuentra sin buscarlo; en la
-línea de abajo quedaba en gris apagado entre dos cifras. El glifo lleva el fondo
+línea de abajo quedaba en gris apagado entre dos cifras —esa línea va **en
+negritas desde la 1.6.0**, pero el motivo de la barra no era solo el contraste:
+dentro de ella el glifo es parte del título—. El glifo lleva el fondo
 de la barra porque va como hijo `Text` del botón y no como su `label`: un
 `Button` no tiene `inverse` ni `color` propios. Y va `plain`, sin los corchetes
 que el terminal le dibuja por su cuenta, que dentro de la barra se ven como un

@@ -1,4 +1,4 @@
-import type { Hilo, Mesa, Notas, Prompt, Ticket } from '../types'
+import type { Hilo, Mesa, Notas, Prompt, Pulso, Ticket } from '../types'
 
 /**
  * Una línea de ticket: la marca de estado y todo lo que viene detrás.
@@ -176,13 +176,18 @@ export function parseMesa(text: string, mtimeMs: number): Omit<Mesa, 'repo'> {
       if (ticket) current.tickets.push(ticket)
     }
   }
-  // `generador` solo si la cabecera lo dice: una mesa sin él no gana un campo
-  // vacío, y quien resuelve el guion sabe que ahí no hay nada que mirar.
+  // `generador` y `pulso`, solo si el fichero los trae: una mesa sin ellos no
+  // gana un campo vacío, y quien resuelve el guion o pinta el marcador sabe
+  // que ahí no hay nada que mirar. La sección del pulso no estorba a los
+  // hilos: no lleva líneas de ticket, así que entra y sale como un hilo vacío
+  // y el filtro de abajo la quita de la cuenta.
+  const pulso = parsePulso(text)
   return {
     generated,
     hilos: hilos.filter(h => h.tickets.length > 0),
     mtimeMs,
     ...(generador === undefined ? {} : { generador }),
+    ...(pulso === undefined ? {} : { pulso }),
   }
 }
 
@@ -396,4 +401,181 @@ export function quitarNotaN(text: string, n: number, esperada: string): Quitada 
     quitada: actual,
     candidatas: [actual],
   }
+}
+
+/**
+ * El rótulo de la sección del pulso, que es lo que acota su bloque.
+ *
+ * Las cifras se leen **solo ahí dentro** y no en todo el fichero: un `tuyos: 3`
+ * suelto en la prosa de cualquier otra sección no es el marcador, y leer por
+ * clave sin acotar convertiría cualquier frase en un dato.
+ */
+const PULSO_H = /^##\s+pulso/iu
+
+/** Cualquier otra sección: donde acaba la del pulso. */
+const SECCION = /^##\s/u
+
+/** Una cifra del pulso: `clave: entero`. */
+const CIFRA = /^\s*([a-z]+)\s*:\s*(-?\d+)\s*$/iu
+
+/** El tramo, que es la única que no es un número: `tramo: MAR-LUN`. */
+const TRAMO = /^\s*tramo\s*:\s*([\w-]{1,12})\s*$/iu
+
+/**
+ * Lee el marcador de la semana de la sección `## Pulso` de la mesa.
+ *
+ * Devuelve nada si no está la sección o si falta una de las dos cifras que
+ * sostienen el marcador: sin `abren` y `cierran` no hay nada que comparar, y
+ * media línea —«cierran 88» sola— no contesta la pregunta que motiva, que es
+ * si se cierra más de lo que entra. Una mesa cuyo guion todavía no escriba la
+ * sección se pinta como siempre, sin hueco; es la regla de todas las columnas
+ * que se han ido portando de un repositorio a otro.
+ *
+ * Las cifras negativas se descartan en lugar de pintarse: un `abren: -3` es un
+ * guion roto, y un marcador que enseña un dato imposible se cree.
+ */
+export function parsePulso(text: string): Pulso | undefined {
+  let dentro = false
+  const n = new Map<string, number>()
+  let tramo: string | undefined
+  for (const raw of text.split('\n')) {
+    const line = raw.trimEnd()
+    if (PULSO_H.test(line)) {
+      dentro = true
+      continue
+    }
+    if (dentro && SECCION.test(line)) break
+    if (!dentro) continue
+    const cifra = CIFRA.exec(line)
+    if (cifra) {
+      n.set((cifra[1] ?? '').toLowerCase(), Number(cifra[2]))
+      continue
+    }
+    const t = TRAMO.exec(line)
+    if (t) tramo = t[1]
+  }
+  const abren = n.get('abren')
+  const cierran = n.get('cierran')
+  if (abren === undefined || cierran === undefined || abren < 0 || cierran < 0) return undefined
+  /** Las de detrás son opcionales, y una imposible se deja fuera, no se pinta. */
+  const si = (k: string, min: number): number | undefined => {
+    const v = n.get(k)
+    return v === undefined || v < min ? undefined : v
+  }
+  const subtareas = si('subtareas', 0)
+  const tuyos = si('tuyos', 0)
+  const puesto = si('puesto', 1)
+  const personas = si('personas', 1)
+  return {
+    abren,
+    cierran,
+    ...(subtareas === undefined ? {} : { subtareas }),
+    ...(tuyos === undefined ? {} : { tuyos }),
+    ...(puesto === undefined ? {} : { puesto }),
+    ...(personas === undefined ? {} : { personas }),
+    ...(tramo === undefined ? {} : { tramo }),
+  }
+}
+
+/** Un trozo de la línea del marcador, con el papel que hace en ella. */
+export type Trozo = {
+  text: string
+  /**
+   * Qué es, para que el panel le ponga su color sin saber de qué habla: el
+   * rótulo y los separadores van sin color, el `+` de lo que entra en ámbar, el
+   * `-` de lo que se termina en verde, y la flecha del neto en el color de su
+   * sentido. `tu` va sin color porque es lo único de la línea que habla de ti.
+   *
+   * El color no es decoración aquí: es lo que distingue una cifra de otra, que
+   * es por lo que la fila entera va en negritas y el peso no significa nada.
+   */
+  tono: 'rotulo' | 'sep' | 'abren' | 'cierran' | 'gana' | 'pierde' | 'tu'
+}
+
+/**
+ * Las columnas que ocupa el texto en el terminal, no sus caracteres.
+ *
+ * Los glifos del marcador —`+`, `✓`, `▲`, `▼`, `▏`— son todos de **una**
+ * columna en la tabla de anchos, así que hoy esta cuenta no corrige nada. Sigue
+ * aquí porque el día que alguien meta un emoji en la línea la corregirá: un
+ * `✅` es un carácter para JavaScript y **dos celdas** en el terminal, y una
+ * fila que se pasa de ancho envuelve y descuadra la ventana de la mesa entera
+ * —el reparto cuenta una fila por ticket—, que es el fallo que ya costó la
+ * columna del tipo.
+ *
+ * 🔴 **Y por eso el marcador no lleva `✔️`**, que es la palomita que se pediría
+ * primero: son dos caracteres —`✔` más un selector de variación invisible— y el
+ * selector **no** cambia la tabla, solo le pide al que pinta que lo dibuje como
+ * emoji de color. Resultado: esta cuenta dice 1, el motor que monta la fila
+ * dice 1 y el terminal pinta 2. Una columna de desacuerdo que no se puede
+ * arreglar desde aquí, porque quien rellena y recorta la fila es el motor. El
+ * `✅` (U+2705) no tiene ese problema —la tabla lo marca ancho y los tres
+ * cuentan 2—, y el `✓` tampoco —los tres cuentan 1—.
+ */
+function columnas(s: string): number {
+  return s.length + (s.match(/[✅⚠]/gu)?.length ?? 0)
+}
+
+/**
+ * Parte el marcador en los trozos que caben en `width`, en orden de izquierda
+ * a derecha y **por grupos enteros**.
+ *
+ * Por grupos y no trozo a trozo porque cada uno va detrás de su separador: con
+ * el corte a mitad de grupo la línea acabaría en un `▏` colgando, apuntando a
+ * un dato que no está. Lo que no cabe se cae por la derecha, que es el orden en
+ * que importa: las dos cifras que se comparan, el neto que resume y lo tuyo.
+ *
+ * Si no cabe ni la primera cifra no se devuelve nada y el panel no pinta la
+ * fila: en un panel de ese ancho un marcador cortado ocupa una fila de la mesa
+ * para no decir nada.
+ */
+export function trozosDePulso(p: Pulso, width: number): Trozo[] {
+  const neto = p.cierran - p.abren
+  const sitio = p.puesto !== undefined && p.personas !== undefined ? ` · ${p.puesto}.º/${p.personas}` : ''
+  const grupos: Trozo[][] = [
+    [{ text: `SEMANA ${p.tramo ? `${p.tramo} ` : ''} `, tono: 'rotulo' }],
+    // `+` lo que entra y `-` lo que se termina, en lugar de las palabras: dos
+    // glifos de una columna que se leen sin leerlos, y son **el mismo par**, así
+    // que el ojo los empareja sin que nada se lo explique.
+    //
+    // El guion es el de teclado y no el menos tipográfico `−`: es el par exacto
+    // del `+` que lleva al lado y está en todas las monoespaciadas, mientras que
+    // el `−` se pinta como un cuadrito en las que no lo traen.
+    //
+    // 🔴 **Las subtareas no se pintan**, aunque la mesa las cuente: siguen fuera
+    // de `abren` y de `cierran` —contarlas premia a quien desglosa— y quedan en
+    // el fichero, en `subtareas`, para quien lo abra. En la fila eran un tercer
+    // número que había que explicar cada vez, y la fila existe para no tener que
+    // explicar nada.
+    [{ text: `+ ${p.abren}`, tono: 'abren' }],
+    [
+      { text: ' ▏', tono: 'sep' },
+      { text: `- ${p.cierran}`, tono: 'cierran' },
+    ],
+    [
+      { text: ' ▏', tono: 'sep' },
+      // La flecha dice el sentido y el color lo confirma: ▲ verde cuando se
+      // cierra más de lo que entra, ▼ rojo cuando no. Y es flecha, y no el signo
+      // del neto, porque los dos signos ya están ocupados a su izquierda
+      // diciendo otra cosa: un `−4` detrás de un `+ 16 ▏- 12` es el tercer
+      // signo de la fila.
+      { text: `${neto >= 0 ? '▲' : '▼'}${Math.abs(neto)}`, tono: neto >= 0 ? 'gana' : 'pierde' },
+    ],
+  ]
+  if (p.tuyos !== undefined) {
+    grupos.push([
+      { text: ' ▏', tono: 'sep' },
+      { text: `tú ${p.tuyos}${sitio}`, tono: 'tu' },
+    ])
+  }
+  const trozos: Trozo[] = []
+  let ancho = 0
+  for (const grupo of grupos) {
+    const suma = grupo.reduce((n, t) => n + columnas(t.text), 0)
+    if (ancho + suma > width) break
+    trozos.push(...grupo)
+    ancho += suma
+  }
+  // Con el rótulo solo no hay marcador: o entra una cifra o no se pinta la fila.
+  return trozos.some(t => t.tono === 'abren') ? trozos : []
 }
