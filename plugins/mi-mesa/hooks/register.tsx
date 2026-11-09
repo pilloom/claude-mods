@@ -12,6 +12,7 @@ import {
   parseNotas,
   quitarNota,
   quitarNotaN,
+  trozosDePulso,
 } from './parse'
 
 const PANE = 'mi-mesa'
@@ -704,9 +705,20 @@ export const register: Register = (on, options) => {
         )
       }
     })
+    /**
+     * El marcador de la semana, ya repartido en los trozos que caben.
+     *
+     * Vacío cuando la mesa no trae la sección —el guion de ese repositorio
+     * todavía no la escribe— y cuando el panel es tan estrecho que no entra
+     * ni la primera cifra. En los dos casos no se pinta la fila, y la mesa se
+     * queda con ella: el reparto de abajo lo cuenta.
+     */
+    const marcador = m.pulso ? trozosDePulso(m.pulso, width) : []
     // Lo que la cabecera de la sección se queda antes de las filas: la barra
-    // del título, la línea de la cuenta y la de cada error que haya.
-    const cabecera = 2 + (m.error ? 1 : 0) + (reg.error ? 1 : 0)
+    // del título, la línea de la cuenta, la del marcador si lo hay y la de
+    // cada error que haya. Contarla de menos corre la ventana una fila y la
+    // última línea de la mesa se pierde por debajo del corte.
+    const cabecera = 2 + (marcador.length > 0 ? 1 : 0) + (m.error ? 1 : 0) + (reg.error ? 1 : 0)
     // Sin filas conocidas —un test, una superficie que no manda las props— no
     // hay reparto y no hay ventana: la mesa se pinta entera, como siempre.
     const visibles = arriba === undefined ? filas.length : Math.max(1, arriba - cabecera)
@@ -846,7 +858,10 @@ export const register: Register = (on, options) => {
               ve se encuentra sin saber el atajo. Van en el mismo `plain` que
               la `↻` del título, y desaparecen con la mesa que cabe entera. */}
           <Box key="cuenta" flexDirection="row">
-            <Text dimColor>
+            {/* En negritas y no apagada: con el marcador debajo, las dos líneas
+                de cifras son lo que se lee de un vistazo bajo el título, y una
+                en gris y la otra en color no se leían como un par. */}
+            <Text bold>
               {/* Rellenada hasta el borde, como el título con su `↻`: así las
                   flechas se van al lado derecho de la fila en lugar de quedarse
                   pegadas al final de la cuenta, donde la línea cambia de largo
@@ -867,7 +882,11 @@ export const register: Register = (on, options) => {
                 hover={{ color: 'yellow' }}
                 onPress={mover(-pagina)}
               >
-                <Text dimColor={desde === 0}>{' ▲'}</Text>
+                {/* La que no puede moverse **pierde las negritas** en vez de
+                    ganar un `dimColor`: el par se pelea, y lo que se quiere
+                    decir —esta flecha está gastada— se dice igual quitando
+                    peso. */}
+                <Text bold={desde !== 0} dimColor={desde === 0}>{' ▲'}</Text>
               </Button>
             ) : null}
             {sobra ? (
@@ -878,10 +897,46 @@ export const register: Register = (on, options) => {
                 hover={{ color: 'yellow' }}
                 onPress={mover(pagina)}
               >
-                <Text dimColor={desde >= tope}>{' ▼'}</Text>
+                <Text bold={desde < tope} dimColor={desde >= tope}>{' ▼'}</Text>
               </Button>
             ) : null}
           </Box>
+          {/* El marcador de la semana: lo que entró contra lo que salió, del
+              Team entero y sin nombres. Una sola fila, y debajo de la cuenta
+              porque es de la misma familia —cifras de la mesa, no tickets— y
+              porque así la mesa no pierde más de una.
+              Va en trozos y no en un `Text` con todo dentro porque cada cifra
+              tiene su color y en este motor el color es del `Text`: ámbar lo
+              que entra, verde lo que sale, el neto del color de su signo, y lo
+              tuyo en negritas sin color, que es lo único que habla de ti.
+              Quien decide qué cabe es `trozosDePulso`, no el terminal: una fila
+              que envuelve descuadra la ventana de la mesa, que reparte filas
+              contando una por ticket. */}
+          {marcador.length > 0 ? (
+            <Box key="pulso" flexDirection="row">
+              {/* La fila entera en negritas, como la de la cuenta: lo que
+                  separa una cifra de otra es el color, no el peso. El rótulo y
+                  los separadores van en negritas y **sin color**, que es lo que
+                  los deja detrás de las cifras sin apagarlos: `dimColor` y
+                  `bold` juntos se pelean —uno baja la intensidad y el otro la
+                  sube— y cada terminal resuelve ese par a su manera. */}
+              {marcador.map((t, i) => (
+                <Text
+                  key={`pulso-${i}`}
+                  bold
+                  {...(t.tono === 'abren'
+                    ? { color: 'warning' as const }
+                    : t.tono === 'cierran' || t.tono === 'gana'
+                      ? { color: 'success' as const }
+                      : t.tono === 'pierde'
+                        ? { color: 'error' as const }
+                        : {})}
+                >
+                  {t.text}
+                </Text>
+              ))}
+            </Box>
+          ) : null}
           {m.error ? <Text color="red">{cut(m.error, width)}</Text> : null}
           {reg.error ? <Text color="red">{cut(reg.error, width)}</Text> : null}
           {ventana}

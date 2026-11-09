@@ -30,6 +30,15 @@ export type Mesa = {
    * cuya cabecera lo diga, y de ahí sale el comando del botón de regenerar.
    */
   generador?: string
+  /**
+   * El marcador de la semana, si el guion de ese repositorio lo escribe.
+   *
+   * Va en la mesa y no en un fichero aparte porque es la misma consulta y el
+   * mismo guion: el fichero ya cuenta cosas del Team entero —los abiertos sin
+   * asignar, las épicas— en «Lo que NO está aquí», así que un marcador del
+   * Team no le cambia la naturaleza al fichero ni obliga a generar dos.
+   */
+  pulso?: Pulso
 }
 
 /**
@@ -91,6 +100,70 @@ export type Notas = {
 export type NotaInput = {
   accion?: 'anadir' | 'quitar' | 'listar'
   texto?: string
+}
+
+/**
+ * El marcador de la semana: lo que entra contra lo que sale.
+ *
+ * Es **flujo, no existencias**: `abren` son los tickets *creados* en el tramo
+ * y `cierran` los *cerrados* en ese mismo tramo, no los que hay abiertos ahora
+ * mismo —que es lo que cuenta la mesa de arriba—. De los dos juntos sale lo
+ * único que contesta «¿vamos ganando?»: si se cierra más de lo que entra.
+ *
+ * Son cifras del **Team entero y sin nombres**: la comparación motiva, la lista
+ * de quién va último señala. Lo tuyo sale aparte (`tuyos`) y tu sitio en la
+ * tabla como un número (`puesto` de `personas`), que es lo que te dice si subes
+ * sin decirle a nadie quién está debajo.
+ *
+ * Lo escribe el guion generador de cada repositorio, como todo lo que el panel
+ * pinta, y **todo es opcional menos `abren` y `cierran`**: una mesa cuyo guion
+ * todavía no escriba la sección no gana un marcador en blanco, se pinta como
+ * siempre. La misma regla que la columna del tipo y la de quién lo tiene.
+ */
+export type Pulso = {
+  /** Tickets creados en el tramo. */
+  abren: number
+  /**
+   * Tickets cerrados en el tramo, **sin contar subtareas**.
+   *
+   * Sin esa resta el marcador premia a quien desglosa: en LAN, 9 de cada 10
+   * cierres recientes son subtareas de una misma persona, y un tablero que se
+   * ve enseña rápido a partir el trabajo en nueve trozos. Las subtareas no se
+   * esconden —van en `subtareas`, a su lado—, pero no entran en la cuenta que
+   * compara.
+   */
+  cierran: number
+  /**
+   * Subtareas cerradas en el tramo.
+   *
+   * 🔴 **Se lee y no se pinta.** Siguen fuera de `abren` y de `cierran`
+   * —contarlas premia a quien desglosa— y la mesa las cuenta para quien abra el
+   * fichero, pero en la fila del panel eran un tercer número que había que
+   * explicar cada vez, y la fila existe justamente para no tener que explicar
+   * nada. Si vuelven, el sitio es `trozosDePulso`.
+   */
+  subtareas?: number
+  /** Los que cerraste tú, con el mismo criterio que `cierran`. */
+  tuyos?: number
+  /** Tu sitio en la tabla de cierres del Team, 1 el primero. */
+  puesto?: number
+  /** Entre cuántas personas, para que el puesto signifique algo. */
+  personas?: number
+  /**
+   * Qué tramo cuentan las cifras, **como la mesa lo nombre**: `MAR-LUN` la
+   * semana entera, `MAR-JUE` un jueves por la tarde.
+   *
+   * La semana va de **martes a lunes**, porque el lunes es el día de las
+   * revisiones: lo que se cierra ese día es la cosecha de la semana que acaba,
+   * no el arranque de la siguiente. Quién sabe por dónde va es el guion que
+   * consultó Jira, no quien dibuja: el panel lo pinta tal cual, sin calendario
+   * propio —y por eso cambiar el día en que abre la semana no toca el mod—. Lo
+   * que no hace el guion es fiarse del `startOfWeek()` de Jira: el primer día
+   * de la semana es un ajuste de la instancia, ninguna instancia abre en
+   * martes, y el día que alguien lo moviera el tramo entero se correría sin que
+   * nada lo delate.
+   */
+  tramo?: string
 }
 
 declare module 'claude-code' {

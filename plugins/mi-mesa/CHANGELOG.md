@@ -1,5 +1,76 @@
 # Changelog
 
+## [1.6.0] — 2026-11-07
+
+### El marcador de la semana
+
+- Una fila nueva debajo de la cuenta de la mesa con **lo que entra contra lo que
+  sale**: `SEMANA MAR-LUN  + 64 ▏- 57 ▏▼7 ▏tú 18 · 2.º/9`.
+  Contesta de un vistazo la única pregunta que mueve a cerrar —si se cierra más
+  de lo que se abre— y lo hace sin abrir Jira.
+- Es **flujo, no existencias**: `abren` son los tickets *creados* en el tramo y
+  `cierran` los *cerrados* en ese mismo tramo. No son los 73 que hay encima de
+  la mesa, que es otra cifra y está en la línea de arriba.
+- La semana va de **martes a lunes**, porque **el lunes es el día de las
+  revisiones**: lo que se cierra ese día es la cosecha de la semana que acaba, no
+  el arranque de la siguiente. Con el corte en lunes —o en domingo— esos cierres
+  se le apuntaban a la semana nueva y las dos salían mal. El tramo lo escribe el
+  guion —`MAR-LUN` acabada, `MAR-JUE` un jueves—, no el panel, **así que cambiar
+  el día en que abre la semana no toca el mod**. Y el guion no se fía del
+  `startOfWeek()` de Jira: el primer día de la semana es un ajuste de la
+  instancia, ninguna abre en martes, y el día que alguien lo moviera el marcador
+  contaría otro tramo sin que nada lo delate.
+- Las **subtareas no entran en la cuenta que compara**, van a su lado
+  (`+31 subt.`). Sin esa resta el marcador premia a quien desglosa: en LAN, 9
+  de cada 10 cierres recientes son subtareas de una misma persona, y un tablero
+  que se ve enseña rápido a partir el trabajo en nueve trozos.
+- Las cifras son del **Team entero y sin nombres**. Lo tuyo sale aparte y tu
+  sitio como un número —`tú 18 · 2.º/9`—: la comparación motiva, y la lista de
+  quién va último señala. Quién está debajo de ti no se pinta porque no hace
+  falta para subir.
+- Una fila, y la mesa la paga: el reparto la cuenta en la cabecera de la
+  sección, así que la ventana pasa de `1-10/17` a `1-9/17`. Contarla de menos
+  corría la ventana y la última línea se perdía por debajo del corte sin que
+  nada lo dijera.
+- **Un `+` lo que entra y un `-` lo que se termina**, en lugar de las palabras:
+  dos glifos de una columna, el mismo par, y el ojo los empareja sin que nada se
+  lo explique. El guion es el de teclado y no el menos tipográfico `−`, que se
+  pinta como un cuadrito en las monoespaciadas que no lo traen. Y el neto, en una
+  **flecha con su color**: `▲16` verde cuando se cierra más de lo que entra,
+  `▼7` rojo cuando no — flecha y no el signo del neto, porque los dos signos ya
+  están ocupados a su izquierda.
+- 🔴 **Las subtareas se cuentan y no se pintan.** Siguen fuera de las dos cifras
+  que se comparan y quedan en el fichero, en `subtareas`, para quien lo abra. En
+  la fila eran un tercer número que había que explicar cada vez, y la fila existe
+  para no tener que explicar nada.
+- 🔴 **El marcador no lleva `✔️`**, que es la palomita que se pide primero. Son
+  dos caracteres —`✔` más un selector de variación invisible— y el selector no
+  cambia la tabla de anchos, solo le pide al terminal que pinte un emoji de
+  color: el recorte dice 1 columna, el motor que monta la fila dice 1 y el
+  terminal pinta 2. Esa columna de desacuerdo no se arregla desde el mod, porque
+  quien rellena y recorta la fila es el motor, y una fila que envuelve descuadra
+  la ventana de la mesa. El `✓` lo cuentan 1 los tres; el `✅`, 2 los tres —pero
+  choca con el emoji de tipo de las líneas de ticket—.
+- **Las dos líneas de cifras van en negritas**, la de la cuenta y la del
+  marcador: con una en gris apagado y la otra en color no se leían como el par
+  que son. Lo que distingue una cifra de otra es el color, no el peso. Y
+  `bold` con `dimColor` no se usan juntos en ninguna parte del panel —se pelean,
+  y cada terminal resuelve ese par a su manera—, así que la flecha que no puede
+  moverse pierde las negritas en lugar de ganar un apagado.
+- Lo escribe el **guion generador de cada repositorio**, en una sección
+  `## Pulso` de `docs/MI-MESA.md` con un `clave: valor` por cifra, y el panel
+  pinta lo que venga. Todo es opcional menos `abren` y `cierran`: la mesa cuyo
+  guion todavía no la escriba se pinta como siempre, sin hueco —la misma regla
+  que la columna del tipo y la de quién lo tiene—, y media cifra no es un
+  marcador: «cierran 57» sola no dice si vamos ganando.
+- Las cifras se leen **solo dentro de su sección**. Leyendo por clave en todo el
+  fichero, cualquier `tuyos: 3` de la prosa se convertía en un dato.
+- Lo que no cabe se cae **por la derecha y por grupos enteros**, que es lo que
+  deja la línea sin un `▏` colgando apuntando a un dato que no está; y el `✅`
+  se mide como **dos columnas**, que es lo que ocupa en el terminal aunque sea
+  un carácter. Una fila que envuelve descuadra la ventana de la mesa entera,
+  que reparte filas contando una por ticket.
+
 ## [1.5.0] — 2026-11-06
 
 ### La mesa que no cabe se desplaza

@@ -1,7 +1,7 @@
 {
   "name": "mi-mesa",
-  "version": "1.5.0",
-  "description": "Panel con tu mesa de trabajo (docs/MI-MESA.md) agrupada por hilo y con un botón para regenerarla, el post-it de NOTAS.md —que se escribe pidiéndolo o con /nota— y los últimos mensajes que le pasaste a Claude Code, más un sonido al acabar el turno",
+  "version": "1.6.0",
+  "description": "Panel con tu mesa de trabajo (docs/MI-MESA.md) agrupada por hilo, el marcador de la semana —lo que se abre contra lo que se cierra— y un botón para regenerarla, el post-it de NOTAS.md —que se escribe pidiéndolo o con /nota— y los últimos mensajes que le pasaste a Claude Code, más un sonido al acabar el turno",
   "types": "./types/index.d.ts",
   "author": {
     "name": "RBSistemas"

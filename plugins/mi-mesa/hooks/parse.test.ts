@@ -7,7 +7,9 @@ import {
   parseHistory,
   parseMesa,
   parseNotas,
+  parsePulso,
   quitarNota,
+  trozosDePulso,
 } from './parse'
 
 const SAMPLE = `# Mi mesa de trabajo
@@ -346,4 +348,106 @@ test('una ruta que apunta fuera, o a lo que no es un guion, no se ejecuta', () =
   ]) {
     expect(comandoDe(ruta)).toBeUndefined()
   }
+})
+
+const PULSO = [
+  '## Pulso de la semana',
+  '',
+  '```',
+  'tramo: MAR-LUN',
+  'abren: 62',
+  'cierran: 57',
+  'subtareas: 31',
+  'tuyos: 18',
+  'puesto: 2',
+  'personas: 9',
+  '```',
+].join('\n')
+
+test('parsePulso lee las cifras de su sección', () => {
+  expect(parsePulso(PULSO)).toEqual({
+    abren: 62,
+    cierran: 57,
+    subtareas: 31,
+    tuyos: 18,
+    puesto: 2,
+    personas: 9,
+    tramo: 'MAR-LUN',
+  })
+})
+
+test('parsePulso solo pide abren y cierran; el resto es opcional', () => {
+  expect(parsePulso('## Pulso\nabren: 4\ncierran: 9\n')).toEqual({ abren: 4, cierran: 9 })
+})
+
+/**
+ * Es la regla de todas las columnas que se han portado de un repositorio a
+ * otro: la mesa cuyo guion todavía no escribe la sección se lee igual, y el
+ * panel decide por la ausencia que ahí no pinta nada.
+ */
+test('una mesa sin la sección del pulso no gana un marcador en blanco', () => {
+  expect(parsePulso('# Mi mesa\n\n## un-hilo (1) — hoy\n\n·  LAN-1 med Algo\n')).toBeUndefined()
+  // Media cifra no es un marcador: «cierran 88» solo no dice si vamos ganando.
+  expect(parsePulso('## Pulso\ncierran: 88\n')).toBeUndefined()
+  expect(parseMesa('## Pulso\nabren: 1\ncierran: 2\n', 1).pulso).toEqual({ abren: 1, cierran: 2 })
+  expect(parseMesa('## un-hilo (0) — hoy\n', 1).pulso).toBeUndefined()
+})
+
+/**
+ * Las cifras se leen **solo** dentro de su sección: leer por clave en todo el
+ * fichero convertiría cualquier frase de la prosa en un dato del marcador.
+ */
+test('parsePulso no lee cifras de fuera de su sección', () => {
+  expect(parsePulso('## Otra cosa\nabren: 9\ncierran: 9\n')).toBeUndefined()
+  // Y la sección acaba donde empieza la siguiente.
+  expect(parsePulso('## Pulso\nabren: 1\ncierran: 2\n\n## Otra\ntuyos: 7\n')?.tuyos).toBeUndefined()
+})
+
+/** Un `abren: -3` es un guion roto, y un marcador que enseña lo imposible se cree. */
+test('parsePulso descarta las cifras imposibles en vez de pintarlas', () => {
+  expect(parsePulso('## Pulso\nabren: -3\ncierran: 2\n')).toBeUndefined()
+  expect(parsePulso('## Pulso\nabren: 3\ncierran: 2\npuesto: 0\n')?.puesto).toBeUndefined()
+})
+
+test('la línea del marcador se escribe de izquierda a derecha', () => {
+  const linea = trozosDePulso(parsePulso(PULSO)!, 80)
+    .map(t => t.text)
+    .join('')
+  expect(linea).toBe('SEMANA MAR-LUN  + 62 ▏- 57 ▏▼5 ▏tú 18 · 2.º/9')
+  // 🔴 Las subtareas se cuentan y **no se pintan**: están en el fichero para
+  // quien lo abra, y en la fila eran un tercer número que explicar.
+  expect(linea).not.toContain('subt')
+  // Cerrando más de lo que entra, la flecha y el color cambian de sentido.
+  const gana = trozosDePulso({ abren: 10, cierran: 26 }, 80)
+  expect(gana.map(t => t.text).join('')).toBe('SEMANA  + 10 ▏- 26 ▏▲16')
+  expect(gana.some(t => t.tono === 'gana')).toBe(true)
+  expect(trozosDePulso({ abren: 10, cierran: 10 }, 80).some(t => t.tono === 'gana')).toBe(true)
+})
+
+/**
+ * Lo que no cabe se cae por la derecha y por grupos enteros: un corte a mitad
+ * de grupo deja un `▏` colgando, apuntando a un dato que no está. Y una fila
+ * que se pasa de ancho envuelve, que descuadra la ventana de la mesa entera.
+ */
+test('el marcador se recorta por grupos y nunca se pasa de ancho', () => {
+  const p = parsePulso(PULSO)!
+  for (let width = 10; width <= 80; width++) {
+    const linea = trozosDePulso(p, width)
+      .map(t => t.text)
+      .join('')
+    // Se mide como se pinta: un emoji es un carácter y dos columnas. Hoy la
+    // línea no lleva ninguno —son todos glifos de una columna—, y la cuenta se
+    // queda para el día que alguien meta uno.
+    const columnas = linea.length + (linea.match(/[✅⚠]/gu)?.length ?? 0)
+    expect(columnas).toBeLessThanOrEqual(width)
+    expect(linea.endsWith('▏')).toBe(false)
+  }
+  // 🔴 Y ningún glifo de la línea puede ser de los que miden distinto a como se
+  // pintan: `✔️` es el caso —dos caracteres, y el selector de variación no
+  // cambia la tabla de anchos, solo le pide al terminal que lo pinte como
+  // emoji—, así que esta cuenta diría 1 y el terminal pintaría 2.
+  expect(trozosDePulso(p, 80).map(t => t.text).join('')).not.toContain('\uFE0F')
+  // Donde no cabe ni la primera cifra no hay fila: ocuparía una de la mesa
+  // para no decir nada.
+  expect(trozosDePulso(p, 12)).toEqual([])
 })
