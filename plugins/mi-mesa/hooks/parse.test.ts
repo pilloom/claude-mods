@@ -2,13 +2,16 @@ import { expect, test } from 'claude-code/testing'
 
 import {
   anadirNota,
+  anchoEnTerminal,
   comandoDe,
   envolver,
+  lineaDeTicket,
   parseHistory,
   parseMesa,
   parseNotas,
   parsePulso,
   quitarNota,
+  recortar,
   trozosDePulso,
 } from './parse'
 
@@ -450,4 +453,51 @@ test('el marcador se recorta por grupos y nunca se pasa de ancho', () => {
   // Donde no cabe ni la primera cifra no hay fila: ocuparía una de la mesa
   // para no decir nada.
   expect(trozosDePulso(p, 12)).toEqual([])
+})
+
+test('el ancho en terminal cuenta dos por emoji y uno por lo demás', () => {
+  expect(anchoEnTerminal('▶ LAN-1')).toEqual(7)
+  expect(anchoEnTerminal('🐞')).toEqual(2)
+  expect(anchoEnTerminal('✅')).toEqual(2)
+  expect(anchoEnTerminal('🚧 📖 x')).toEqual(7)
+  expect(anchoEnTerminal('José')).toEqual(4)
+})
+
+test('recortar no pasa del ancho, y no toca lo que cabe', () => {
+  expect(recortar('hola', 4)).toEqual('hola')
+  expect(recortar('hola mundo', 6)).toEqual('hola …')
+  // El emoji no se parte por la mitad: si no entra, se queda fuera.
+  expect(recortar('ab🐞cd', 4)).toEqual('ab…')
+  expect(anchoEnTerminal(recortar('🐞🐞🐞🐞', 5))).toBeLessThanOrEqual(5)
+})
+
+/**
+ * El fallo de la 1.6.0: el ` → dueño` se pegaba después de recortar el resumen
+ * al ancho, así que toda línea con dueño se pasaba y envolvía.
+ */
+test('la línea de un ticket con dueño largo nunca pasa del ancho', () => {
+  const base = {
+    mark: '🚧',
+    tipo: '📖',
+    key: 'LAN-12345',
+    priority: 'ALTA',
+    summary: 'Mandar positionAgeMs en el probe-ack y medir la latencia del sondeo en el conductor',
+    otherThreads: '',
+    owner: 'María Fernanda de los Ángeles Pérez-Villalobos',
+  }
+  for (const width of [30, 44, 60, 80, 120]) {
+    for (const t of [base, { ...base, tipo: undefined }, { ...base, owner: undefined }, { ...base, mark: '▶' }]) {
+      const linea = lineaDeTicket(t, width)
+      expect(anchoEnTerminal(linea)).toBeLessThanOrEqual(width)
+    }
+  }
+  // Con sitio, el dueño se ve —recortado por la cola— y el resumen también.
+  const ancha = lineaDeTicket(base, 80)
+  expect(ancha).toContain(' → María')
+  expect(ancha).toContain('Mandar positionAgeMs')
+})
+
+test('sin dueño ni emoji la línea sale como siempre', () => {
+  const t = { mark: '▶', key: 'LAN-2669', priority: 'ALTA', summary: 'corto', otherThreads: '' }
+  expect(lineaDeTicket(t, 80)).toEqual('▶ LAN-2669 ALTA corto')
 })

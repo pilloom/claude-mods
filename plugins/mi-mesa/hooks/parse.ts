@@ -579,3 +579,72 @@ export function trozosDePulso(p: Pulso, width: number): Trozo[] {
   // Con el rótulo solo no hay marcador: o entra una cifra o no se pinta la fila.
   return trozos.some(t => t.tono === 'abren') ? trozos : []
 }
+
+/**
+ * Las columnas que ocupa `s` en el terminal, contando por punto de código.
+ *
+ * Un emoji de presentación —`🐞`, `✅`, `📖`, `❔`, `🚧`— ocupa dos; los
+ * selectores de variación y las marcas que se combinan no ocupan nada; el
+ * resto, una. No es la tabla entera del terminal, pero es la que pisan los
+ * glifos que escribe la mesa, y se queda corta antes que larga: `▶` sin
+ * selector se cuenta como uno, que es como lo pinta el terminal.
+ *
+ * Por punto de código y no con `length`: un `🐞` son dos unidades de UTF-16 y
+ * un `✅` una, y los dos ocupan dos columnas.
+ */
+export function anchoEnTerminal(s: string): number {
+  let n = 0
+  for (const c of s) {
+    if (/[\u{FE00}-\u{FE0F}\u{200D}\p{M}]/u.test(c)) continue
+    n += /\p{Emoji_Presentation}/u.test(c) ? 2 : 1
+  }
+  return n
+}
+
+/**
+ * Recorta `s` para que no pase de `n` columnas, con `…` al final si recorta.
+ *
+ * El `cut` del panel cuenta caracteres, y con un emoji delante una línea
+ * «recortada al ancho» se pasa una columna, envuelve y se come la fila de
+ * debajo. Este cuenta columnas.
+ */
+export function recortar(s: string, n: number): string {
+  if (anchoEnTerminal(s) <= n) return s
+  if (n <= 0) return ''
+  let out = ''
+  let ancho = 0
+  for (const c of s) {
+    const w = anchoEnTerminal(c)
+    if (ancho + w > n - 1) break
+    out += c
+    ancho += w
+  }
+  return out + '…'
+}
+
+/**
+ * La línea de un ticket, que **nunca pasa de `width` columnas**.
+ *
+ * El panel reparte la ventana de la mesa contando una fila por ticket: una
+ * línea que se pasa del ancho envuelve, ocupa dos, y lo que sobra lo pierde la
+ * caja de arriba por algún sitio —en la 1.6.0, la fila del marcador cuando
+ * había post-it—. Hasta la 1.6.0 el resumen se recortaba al ancho menos un
+ * prefijo fijo y **después** se le pegaba ` → dueño` sin descontarlo, así que
+ * todo ticket con dueño se pasaba.
+ *
+ * El dueño tiene tope —un cuarto del ancho, y nunca menos de 8— para que un
+ * nombre largo no deje el resumen en nada: el resumen es lo que dice de qué
+ * va el ticket, y el dueño se reconoce por el principio. Y por si el panel es
+ * tan estrecho que ni así cabe, la línea entera se recorta al final.
+ *
+ * Deja una columna libre: es el margen para el glifo que un terminal pinte
+ * más ancho de lo que dice la tabla, que una fila de menos no se nota y una de
+ * más descuadra la mesa.
+ */
+export function lineaDeTicket(t: Ticket, width: number): string {
+  const ancho = Math.max(1, width - 1)
+  const prefijo = `${t.mark} ${t.tipo ? `${t.tipo} ` : ''}${t.key} ${t.priority.padEnd(4)} `
+  const dueno = t.owner ? ` → ${recortar(t.owner, Math.max(8, Math.floor(width / 4)))}` : ''
+  const hueco = Math.max(10, ancho - anchoEnTerminal(prefijo) - anchoEnTerminal(dueno))
+  return recortar(`${prefijo}${recortar(t.summary, hueco)}${dueno}`, ancho)
+}

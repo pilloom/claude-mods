@@ -168,7 +168,7 @@ export type Pulso = {
 
 declare module 'claude-code' {
   interface PluginState {
-    'mi-mesa': { mesa: Mesa; prompts: Prompt[]; notas: Notas; regen: Regen; vista: number }
+    'mi-mesa': { mesa: Mesa; prompts: Prompt[]; notas: Notas; regen: Regen; vista: number; version: string }
   }
   /**
    * La herramienta que el mod registra en marcha, declarada aquí porque los
