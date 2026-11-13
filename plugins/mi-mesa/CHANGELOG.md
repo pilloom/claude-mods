@@ -1,5 +1,34 @@
 # Changelog
 
+## [1.6.1] — 2026-11-13
+
+### Ninguna fila pasa del ancho, y el marcador no se pierde
+
+- Con **post-it y mesa desbordada se perdía la fila `SEMANA`**. Los tickets con
+  dueño se pasaban del ancho: el resumen se recortaba al ancho menos un prefijo
+  fijo y **después** se le pegaba ` → dueño` sin descontarlo. La línea
+  envolvía y ocupaba dos filas, la ventana —que cuenta una por ticket— no
+  cabía en su caja, y el motor encogía a los hijos para meterla: el que se
+  quedaba en cero era el marcador. El dueño estaba así desde el principio; lo
+  que lo destapó fue la ventana de la 1.5.0, que cuenta filas.
+- La línea del ticket la arma ahora `lineaDeTicket`, que **cuenta columnas y no
+  caracteres** —un emoji ocupa dos— y descuenta el dueño. El dueño tiene tope
+  —un cuarto del ancho, nunca menos de 8— para que un nombre largo no deje el
+  resumen en nada, y en un panel muy estrecho se recorta la línea entera.
+- Las filas de la cabecera —título, cuenta, marcador y errores— llevan
+  `flexShrink={0}`: si algo vuelve a no caber, lo pierde la mesa, que tiene
+  ventana, y no la cabecera.
+- La barra del título y el rótulo del post-it también se recortan al ancho:
+  `padEnd` rellena pero no corta, y un repositorio de nombre largo la hacía
+  envolver.
+
+### La versión en la barra del título
+
+- `MI MESA v1.6.1 · BACKEND_LANZADERA`. Sale del `plugin.json` del mod, no de
+  una copia en el código, y va pegada a «MI MESA» porque la barra se recorta
+  por la derecha: lo primero que se pierde es la cola del nombre del repo, no
+  la versión. Sirve para saber de un vistazo si el reinicio cogió el mod nuevo.
+
 ## [1.6.0] — 2026-11-07
 
 ### El marcador de la semana

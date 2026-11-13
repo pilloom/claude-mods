@@ -1,7 +1,7 @@
 import type { On } from 'claude-code'
 import { expect, mock, test } from 'claude-code/testing'
 
-import { parseNotas } from './parse'
+import { anchoEnTerminal, parseNotas } from './parse'
 
 const MD = [
   '> 🤖 **Generado** por `scripts/qa/listar-mi-mesa.js` el 2026-10-07, para **X**.',
@@ -55,6 +55,17 @@ function pon(disco: Map<string, string>, path: string, text: string): void {
  * el post-it; un repositorio que no la tenga es el worktree o la carpeta que no
  * es un clon, y ahí no se apunta nada.
  */
+/**
+ * La clave del disco en memoria para una ruta: el manifiesto del mod se guarda
+ * como `MANIFIESTO`, sea cual sea su carpeta. El mod lo busca bajo
+ * `$.plugin.root`, y el `$` de un test no trae `plugin`, así que el test no
+ * puede saber esa ruta para escribirlo.
+ */
+const MANIFIESTO = 'MANIFIESTO'
+function clave(path: string): string {
+  return path.endsWith('/.claude-plugin/plugin.json') ? MANIFIESTO : path
+}
+
 function ficheros(on: On, root: string, mesa?: string, notas?: string, git = true): Map<string, string> {
   const disco = new Map<string, string>()
   if (mesa !== undefined) disco.set(`${root}/docs/MI-MESA.md`, mesa)
@@ -62,16 +73,16 @@ function ficheros(on: On, root: string, mesa?: string, notas?: string, git = tru
   if (git) disco.set(`${root}/.git/info`, '')
   versiones.clear()
   on('session.root', async () => ({ value: root }))
-  on('fs.exists', async (_, e) => ({ value: disco.has(e.path) }))
+  on('fs.exists', async (_, e) => ({ value: disco.has(clave(e.path)) }))
   on('fs.stat', async (_, e) => ({
     value: {
       kind: 'file' as const,
-      size: (disco.get(e.path) ?? '').length,
+      size: (disco.get(clave(e.path)) ?? '').length,
       mtimeMs: versiones.get(e.path) ?? 1,
       isLink: false,
     },
   }))
-  on('fs.read', async (_, e) => ({ value: disco.get(e.path) ?? '' }))
+  on('fs.read', async (_, e) => ({ value: disco.get(clave(e.path)) ?? '' }))
   on('fs.write', async (_, e) => {
     disco.set(e.path, e.text)
     versiones.set(e.path, (versiones.get(e.path) ?? 1) + 1)
@@ -1011,5 +1022,72 @@ test('la cuenta y el marcador van en negritas, y sin dimColor', async ($, on) =>
     expect(props.bold, `${texto} tiene que ir en negritas`).toBe(true)
     expect(props.dimColor, `${texto} no puede ir apagada`).not.toBe(true)
   }
+  await ui.unmount()
+})
+
+/**
+ * El caso de la 1.6.1: post-it, marcador y tickets con dueños largos en un
+ * panel estrecho. Las líneas con dueño se pasaban del ancho, envolvían, y la
+ * caja de arriba encogía la fila del marcador hasta dejarla en cero.
+ */
+const CON_DUENOS = [
+  '> 🤖 **Generado** por `scripts/qa/listar-mi-mesa.js` el 2026-11-13, para **X**.',
+  '',
+  '## bucle-sondeo-sin-latido (6) — hoy',
+  '',
+  '```',
+  ...Array.from(
+    { length: 12 },
+    (_, i) =>
+      `🚧 📖 LAN-${3100 + i}  ALTA Mandar positionAgeMs en el probe-ack y medir la latencia  → María Fernanda de los Ángeles Pérez-Villalobos`,
+  ),
+  '```',
+  '',
+  '## Pulso de la semana',
+  '',
+  '```',
+  'tramo: MAR-LUN',
+  'abren: 62',
+  'cierran: 57',
+  '```',
+].join('\n')
+
+test('con nota y dueños largos ninguna fila pasa del ancho y el marcador sigue', async ($, on) => {
+  ficheros(on, ROOT, CON_DUENOS, '# Notas\n- llamar al proveedor\n')
+  sinGit(on)
+  abre(on)
+  await $.command.run({ command: 'mi-mesa', args: '' } as never)
+  const ancho = 44
+  const ui = await $.ui.mount({
+    plugin: 'mi-mesa',
+    surface: 'terminal',
+    component: 'Pane',
+    props: { bodyColumns: ancho, scroll: { offset: 0, bodyRows: 24 } } as never,
+    requestId: 'mi-mesa',
+  })
+  expect(await ui.find({ type: 'Text', text: /SEMANA MAR-LUN/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /LAN-3100/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /→ María/ })).toBeDefined()
+  for (const t of await ui.findAll({ type: 'Text' })) {
+    const texto = typeof t.text === 'string' ? t.text : ''
+    expect(anchoEnTerminal(texto)).toBeLessThanOrEqual(ancho)
+  }
+  await ui.unmount()
+})
+
+test('la barra del título lleva la versión del manifiesto, pegada a MI MESA', async ($, on) => {
+  const disco = ficheros(on, ROOT, MD)
+  disco.set(MANIFIESTO, JSON.stringify({ name: 'mi-mesa', version: '9.9.9' }))
+  sinGit(on)
+  abre(on)
+  await $.command.run({ command: 'mi-mesa', args: '' } as never)
+  const ui = await $.ui.mount({
+    plugin: 'mi-mesa',
+    surface: 'terminal',
+    component: 'Pane',
+    props: { bodyColumns: 80, scroll: { offset: 0, bodyRows: 30 } } as never,
+    requestId: 'mi-mesa',
+  })
+  expect(await ui.find({ type: 'Text', text: /^ MI MESA v9\.9\.9 · BACKEND_LANZADERA / })).toBeDefined()
   await ui.unmount()
 })

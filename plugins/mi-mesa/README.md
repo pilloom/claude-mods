@@ -10,7 +10,7 @@ Claude Code**. Y un **sonido** cuando Claude acaba de contestar.
 × • Pedir las claves de staging a
     Marta antes del jueves
 × • El deploy del viernes no va
- MI MESA · BACKEND_LANZADERA
+ MI MESA v1.6.1 · BACKEND_LANZADERA
 12 tickets · 5 hilos · 1-9/22 · generada 2026-10-08          ▲ ▼
 SEMANA MAR-LUN  + 64 ▏- 57 ▏▼7 ▏tú 18 · 2.º/9
 
@@ -236,7 +236,7 @@ en la barra del título, pegada a su borde derecho, para correrlo sin salir de l
 sesión:
 
 ```
- MI MESA · BACKEND_LANZADERA                        ↻
+ MI MESA v1.6.1 · BACKEND_LANZADERA                 ↻
 2 tickets · 2 hilos · generada 2026-10-29
 ```
 
@@ -262,7 +262,7 @@ escape dejan todo como estaba. Y en un `-p`, donde no hay nadie a quien
 preguntar, no corre: eso es lo que se quiere antes de ejecutar algo que nadie va
 a ver.
 
-Mientras corre, el aviso entra en la propia barra —` MI MESA · BACKEND_LANZADERA
+Mientras corre, el aviso entra en la propia barra —` MI MESA v1.6.1 · BACKEND_LANZADERA
 · REGENERANDO… `— y se queda con el sitio del botón: un control que se deja
 pulsar y no hace nada se pulsa tres veces. Al acabar, la mesa se relee en el
 momento. Si el guion falla, su primera línea de error sale debajo en

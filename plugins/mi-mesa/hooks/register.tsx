@@ -7,11 +7,13 @@ import {
   comandoDe,
   envolver,
   GUIONES,
+  lineaDeTicket,
   parseHistory,
   parseMesa,
   parseNotas,
   quitarNota,
   quitarNotaN,
+  recortar,
   trozosDePulso,
 } from './parse'
 
@@ -70,6 +72,28 @@ const regen = atom({ plugin: 'mi-mesa', key: 'regen' } as const, QUIETO)
  * desplazar. La ventana es del mod, y `ui.scroll` la mueve.
  */
 const vista = atom({ plugin: 'mi-mesa', key: 'vista' } as const, 0)
+/**
+ * La versión del mod, leída de su `plugin.json`, para la barra del título.
+ *
+ * Del manifiesto y no de una constante en este fichero: la versión se sube en
+ * un sitio, y una copia aquí sería la que se olvida. Vacía hasta que se lee, y
+ * vacía si no se puede leer —un test con el disco en memoria—: entonces la
+ * barra sale sin ella, como antes.
+ */
+const version = atom({ plugin: 'mi-mesa', key: 'version' } as const, '')
+
+/** Lee la versión del manifiesto una sola vez por carga del mod. */
+async function leerVersion($: EngineInterface): Promise<void> {
+  if (await read($, version)) return
+  try {
+    const file = `${$.plugin.root}/.claude-plugin/plugin.json`
+    if (!(await $.fs.exists(file))) return
+    const v = (JSON.parse(await $.fs.read(file)) as { version?: unknown }).version
+    if (typeof v === 'string' && v) await update($, version, () => v)
+  } catch {
+    // Un manifiesto que no se lee no tira el panel: la barra sale sin versión.
+  }
+}
 
 /**
  * Cuántas filas ocupa la mesa aplanada: el rótulo de cada hilo, sus tickets y
@@ -104,6 +128,7 @@ async function repoOf($: EngineInterface): Promise<{ root: string; repo: string;
 
 // Relee solo si el fichero cambió: listar-mi-mesa.js lo reescribe entero.
 async function refresh($: EngineInterface): Promise<void> {
+  await leerVersion($)
   const { repo, file } = await repoOf($)
   try {
     if (!(await $.fs.exists(file))) {
@@ -627,7 +652,12 @@ export const register: Register = (on, options) => {
     // —un test que monta sin props, una superficie que no lo manda— no se parte
     // nada: las dos secciones van seguidas y el tercio de abajo no desaparece.
     const rows = e.props?.scroll?.bodyRows ?? 0
-    const titulo = ` MI MESA · ${(m.repo || 'sin repo').toUpperCase()} `
+    const ver = await read($, version)
+    // La versión va pegada a «MI MESA» y no al final: la barra se recorta por
+    // la derecha, y lo que se pierde primero tiene que ser la cola del nombre
+    // del repositorio, que se reconoce por el principio, y no la versión, que
+    // es lo que se mira para saber si el reinicio cogió el mod nuevo.
+    const titulo = ` MI MESA${ver ? ` v${ver}` : ''} · ${(m.repo || 'sin repo').toUpperCase()} `
     /**
      * Lo que la `↻` le quita a la barra del título: el glifo y sus dos
      * espacios. Cero cuando no hay botón —sin guion, o con el guion
@@ -693,14 +723,13 @@ export const register: Register = (on, options) => {
            está y de qué es— quedan juntas al principio de la línea, y el
            resumen sigue empezando donde siempre en las mesas que todavía no
            traen la columna.
-           Le quita tres al hueco del resumen y no dos: el emoji ocupa dos
-           columnas del terminal y `cut` cuenta caracteres, igual que el
-           recorte del post-it. Pasarse de ancho envuelve la línea y descoloca
-           la lista entera —y, ahora, descuadra la ventana—, así que se peca de
-           corto. */
+           Quien la arma es `lineaDeTicket`, que cuenta columnas y no
+           caracteres y descuenta el ` → dueño`: pasarse de ancho envuelve la
+           línea, descuadra la ventana —que cuenta una fila por ticket— y la
+           caja de arriba pierde una fila por algún sitio. */
         filas.push(
           <Text key={t.key} dimColor={t.mark === '·'}>
-            {`${t.mark} ${t.tipo ? `${t.tipo} ` : ''}${t.key} ${t.priority.padEnd(4)} ${cut(t.summary, Math.max(10, width - (t.tipo ? 23 : 20)))}${t.owner ? ` → ${t.owner}` : ''}`}
+            {lineaDeTicket(t, width)}
           </Text>,
         )
       }
@@ -769,9 +798,10 @@ export const register: Register = (on, options) => {
         {altoNotas > 0 ? (
           <Box flexDirection="column" height={altoNotas} overflow="hidden" flexShrink={0}>
             <Text bold color="black" backgroundColor="yellow">
-              {` NOTAS${restan > 0 ? ` · +${restan}` : ''}${post.enGit ? ' · SE SUBE A GIT: git rm --cached NOTAS.md' : ''} `.padEnd(
+              {recortar(
+                ` NOTAS${restan > 0 ? ` · +${restan}` : ''}${post.enGit ? ' · SE SUBE A GIT: git rm --cached NOTAS.md' : ''} `,
                 width,
-              )}
+              ).padEnd(width)}
             </Text>
             {pintadas.map((nota, i) => (
               // La fila entera es el ámbito del hover: la equis se enciende
@@ -826,11 +856,16 @@ export const register: Register = (on, options) => {
               Mientras corre no hay botón: el aviso entra en la propia barra y
               se queda con su sitio. Un control que se deja pulsar y no hace
               nada se pulsa tres veces, y el guion tarda. */}
-          <Box key="titulo" flexDirection="row">
+          {/* Las filas de la cabecera no encogen: cuando lo de debajo no cabe en
+              la caja, el motor encoge a los hijos para meterlo, y la que se
+              quedaba en cero era la del marcador. Que lo pierda la mesa, que
+              es la que tiene ventana. */}
+          <Box key="titulo" flexDirection="row" flexShrink={0}>
             <Text bold inverse color="cyan">
-              {`${titulo}${reg.fase === 'corriendo' ? '· REGENERANDO… ' : ''}`.padEnd(
+              {recortar(
+                `${titulo}${reg.fase === 'corriendo' ? '· REGENERANDO… ' : ''}`,
                 Math.max(0, width - hueco),
-              )}
+              ).padEnd(Math.max(0, width - hueco))}
             </Text>
             {hueco > 0 ? (
               <Button
@@ -857,7 +892,7 @@ export const register: Register = (on, options) => {
               un panel no enseña ninguna de las dos cosas, y un control que se
               ve se encuentra sin saber el atajo. Van en el mismo `plain` que
               la `↻` del título, y desaparecen con la mesa que cabe entera. */}
-          <Box key="cuenta" flexDirection="row">
+          <Box key="cuenta" flexDirection="row" flexShrink={0}>
             {/* En negritas y no apagada: con el marcador debajo, las dos líneas
                 de cifras son lo que se lee de un vistazo bajo el título, y una
                 en gris y la otra en color no se leían como un par. */}
@@ -913,7 +948,7 @@ export const register: Register = (on, options) => {
               que envuelve descuadra la ventana de la mesa, que reparte filas
               contando una por ticket. */}
           {marcador.length > 0 ? (
-            <Box key="pulso" flexDirection="row">
+            <Box key="pulso" flexDirection="row" flexShrink={0}>
               {/* La fila entera en negritas, como la de la cuenta: lo que
                   separa una cifra de otra es el color, no el peso. El rótulo y
                   los separadores van en negritas y **sin color**, que es lo que
@@ -937,8 +972,16 @@ export const register: Register = (on, options) => {
               ))}
             </Box>
           ) : null}
-          {m.error ? <Text color="red">{cut(m.error, width)}</Text> : null}
-          {reg.error ? <Text color="red">{cut(reg.error, width)}</Text> : null}
+          {m.error ? (
+            <Box key="error-mesa" flexShrink={0}>
+              <Text color="red">{recortar(m.error, width)}</Text>
+            </Box>
+          ) : null}
+          {reg.error ? (
+            <Box key="error-regen" flexShrink={0}>
+              <Text color="red">{recortar(reg.error, width)}</Text>
+            </Box>
+          ) : null}
           {ventana}
         </Box>
         <Box flexDirection="column" height={abajo || undefined} overflow="hidden" flexShrink={0}>
