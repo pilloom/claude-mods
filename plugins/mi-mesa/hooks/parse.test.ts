@@ -576,6 +576,15 @@ test('carreraDe con abiertos: quien cerró lo mismo que tú con otra mesa no ere
   expect(cifras?.replace('16 (Tú)', '')).toContain('16')
 })
 
+test('carreraDe con abiertos: los que no cerraron nada son una tortuga, no se pierde ninguno', () => {
+  // `0/1` y `0/50` están los dos al 0 %: antes el segundo desaparecía.
+  const [cifras, flechas, pista] = plana(['15/33', '0/1', '0/50'], '15/33')
+  expect(cifras).toContain('0×2')
+  expect(flechas?.split('▼').length).toBe(3)
+  expect(pista?.match(/🐢/gu)?.length).toBe(1)
+  expect(pista?.endsWith('🐢🚦')).toBe(true)
+})
+
 test('carreraDe: sin los abiertos de todos, la meta vuelve a ser el líder', () => {
   // Un guion de la 1.7 mezclado: sin abiertos de alguien no se puede medir su mesa.
   expect(plana([21, '18/40'], '18/40')[0]).toBe(plana([21, 18], 18)[0])
