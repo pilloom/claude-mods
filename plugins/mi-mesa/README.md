@@ -1,22 +1,27 @@
 # mi-mesa
 
 Un panel con **tu mesa de trabajo** —los tickets abiertos agrupados por hilo y
-**el marcador de la semana**, lo que se abre contra lo que se cierra—, arriba
-**el post-it de `NOTAS.md`** y debajo **los últimos mensajes que le pasaste a
-Claude Code**. Y un **sonido** cuando Claude acaba de contestar.
+**el marcador de la semana**, lo que se abre contra lo que se cierra, y al pie
+**la carrera del Team**—, arriba **el post-it de `NOTAS.md`** y debajo **los
+últimos mensajes que le pasaste a Claude Code**. Y un **sonido** cuando Claude
+acaba de contestar.
 
 ```
  NOTAS
 × • Pedir las claves de staging a
     Marta antes del jueves
 × • El deploy del viernes no va
- MI MESA v1.6.1 · BACKEND_LANZADERA
-12 tickets · 5 hilos · 1-9/22 · generada 2026-10-08          ▲ ▼
+ MI MESA v1.7.0 · BACKEND_LANZADERA
+12 tickets · 5 hilos · 1-5/22 · generada 2026-10-08          ▲ ▼
 SEMANA MAR-LUN  + 64 ▏- 57 ▏▼7 ▏tú 18 · 2.º/9
 
 origen-lan-2501 (3) — hoy
 ▶ 🐞 LAN-2754 ALTA  La mesa no afirma dónde están los sin etiqueta
 · ✅ LAN-2762 med   Revisar la simetría del contrato del latido
+────────────────────────────────────────────────────────────────
+  21      18 (Tú)             11         7          3
+  ▼       ▼                   ▼          ▼          ▼
+🏁🐇──────🐢──────────────────🐢─────────🐢─────────🐢────────🚦
 ────────────────────────────────────────────────────────────────
 Últimos mensajes (4)
 12:31 una linea normal y el titulo de otro color
@@ -229,6 +234,70 @@ ancho justo en el panel acoplado, y una fila que envuelve descuadra la ventana
 de la mesa entera, que reparte filas contando una por ticket: es el mismo fallo
 que ya costó la columna del tipo.
 
+## La carrera de la semana
+
+Al pie de la mesa, justo encima de los mensajes, **los cierres de cada persona
+del Team como una carrera**: una sola pista, un animal por persona, y encima de
+cada uno su flecha y su cifra.
+
+```
+────────────────────────────────────────────────────────────────
+  21   19 18 (Tú)             11         7×2        3
+  ▼    ▼  ▼                   ▼          ▼          ▼
+🏁🐇───🐢─🐢──────────────────🐢─────────🐢─────────🐢────────🚦
+```
+
+Cuenta **lo mismo que el marcador**: el mismo tramo de martes a lunes, sin
+subtareas y por asignado al cerrarse. Cada animal va a la distancia de la meta
+que le toca **en proporción al líder**, que llega a ella. La liebre es del
+líder —y de todos los que empaten en cabeza—; el resto, tortugas.
+
+🔑 **Sin nombres, salvo el tuyo.** Es la misma decisión que el marcador: la
+comparación motiva y la lista de quién va último señala. Ves a cuánto estás del
+líder y cuántos llevas detrás sin que la pista diga quién es nadie. Y no es que
+el panel los esconda: **el guion ni los escribe**, así que no están en el
+fichero.
+
+🔑 **La pista va al revés —meta a la izquierda, salida a la derecha— por los
+emojis.** 🐇 y 🐢 miran a la izquierda en la fuente de emojis de macOS, y un
+terminal no puede voltear un glifo: así corren hacia donde miran. 🏁 marca la
+meta y 🚦 la salida.
+
+**Tú vas siempre donde te toca**, y quien te pisa se aparta:
+
+- Los que van **detrás** de ti, y los que **empatan contigo** —como el empate
+  con la banca—, retroceden hacia la salida hasta que su cifra deja de pisar la
+  tuya.
+- Los que van **delante** se apartan hacia la meta: retrocederlos los pondría
+  detrás de ti con más cierres, y la carrera mentiría.
+- Los demás que empatan entre sí son **una sola tortuga**, con `7×2`.
+- Pegada a la salida, tu etiqueta crece hacia la meta y se lee `(Tú) 0`, para
+  que la flecha siga cayendo debajo de la cifra.
+- Si alguien no cabe al apartarse, pierde su cifra antes que pisar la tuya.
+
+Ocupa **cuatro filas** —la raya que la separa de la mesa, como la de los
+mensajes, y sus tres— y las paga la mesa, no los mensajes. Se queda **fija al
+fondo** mientras la ventana se desplaza: es el pie de la mesa, no una fila más.
+**La mesa manda**: si no le quedan tres filas de tickets, la carrera no se pinta
+—entera, nunca a medias—, y tampoco en un panel tan estrecho que la pista no
+mida 20 columnas. Los emojis se cuentan a dos columnas, y ninguna fila pasa de
+`ancho - 1`.
+
+### Lo que el guion tiene que escribir
+
+Una línea más en la sección `## Pulso`: **una cifra por persona**, la tuya
+incluida, en cualquier orden.
+
+```
+tuyos: 18
+carrera: 21 18 11 7 3
+```
+
+Sin `carrera` o sin `tuyos` no hay carrera, y la mesa se pinta como antes, sin
+hueco. Si no cerraste nada y el guion no te puso, el panel te añade con `0`: lo
+tuyo ya lo dice `tuyos`. Una línea con algo que no sea un número —un nombre— no
+se lee.
+
 ## Regenerar la mesa
 
 El fichero lo escribe el guion de cada repositorio, y el panel pinta una **`↻`**
@@ -236,7 +305,7 @@ en la barra del título, pegada a su borde derecho, para correrlo sin salir de l
 sesión:
 
 ```
- MI MESA v1.6.1 · BACKEND_LANZADERA                 ↻
+ MI MESA v1.7.0 · BACKEND_LANZADERA                 ↻
 2 tickets · 2 hilos · generada 2026-10-29
 ```
 
@@ -262,7 +331,7 @@ escape dejan todo como estaba. Y en un `-p`, donde no hay nadie a quien
 preguntar, no corre: eso es lo que se quiere antes de ejecutar algo que nadie va
 a ver.
 
-Mientras corre, el aviso entra en la propia barra —` MI MESA v1.6.1 · BACKEND_LANZADERA
+Mientras corre, el aviso entra en la propia barra —` MI MESA v1.7.0 · BACKEND_LANZADERA
 · REGENERANDO… `— y se queda con el sitio del botón: un control que se deja
 pulsar y no hace nada se pulsa tres veces. Al acabar, la mesa se relee en el
 momento. Si el guion falla, su primera línea de error sale debajo en
@@ -488,7 +557,7 @@ las dos se verían apagadas**: están en un solo sitio cada una, al final de
 
 ```bash
 claude plugin validate .            # manifiesto y módulo, como los lee el motor
-claude plugin test .                # 56 tests
+claude plugin test .                # 88 tests
 ```
 
 Para los tipos hace falta que el motor haya cargado el mod alguna vez desde su
