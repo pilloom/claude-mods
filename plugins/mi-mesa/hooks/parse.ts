@@ -573,7 +573,11 @@ export function carreraDe(dorsales: readonly Dorsal[], yo: Dorsal, width: number
       quitado = true
       continue
     }
-    const k = deMesa ? `${d.cerrados}/${d.abiertos}` : String(d.cerrados)
+    // Se agrupa por lo que se PINTA —la cifra y el sitio—, no por el dorsal
+    // entero: `0/1` y `0/50` están los dos al 0 %, con la misma cifra encima, y
+    // como dos corredores el segundo no cabía en la salida y desaparecía de la
+    // pista. Juntos son una tortuga con `0×2`, como cualquier otro empate.
+    const k = deMesa ? `${d.cerrados}@${avance(d)}` : String(d.cerrados)
     const prev = resto.get(k)
     resto.set(k, { d, n: (prev?.n ?? 0) + 1 })
   }

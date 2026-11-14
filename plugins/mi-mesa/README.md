@@ -11,7 +11,7 @@ acaba de contestar.
 × • Pedir las claves de staging a
     Marta antes del jueves
 × • El deploy del viernes no va
- MI MESA v1.8.0 · BACKEND_LANZADERA
+ MI MESA v1.8.1 · BACKEND_LANZADERA
 12 tickets · 5 hilos · 1-5/22 · generada 2026-10-08          ▲ ▼
 SEMANA MAR-LUN  + 64 ▏- 57 ▏▼7 ▏tú 18 · 2.º/9
 
@@ -336,7 +336,7 @@ en la barra del título, pegada a su borde derecho, para correrlo sin salir de l
 sesión:
 
 ```
- MI MESA v1.8.0 · BACKEND_LANZADERA                 ↻
+ MI MESA v1.8.1 · BACKEND_LANZADERA                 ↻
 2 tickets · 2 hilos · generada 2026-10-29
 ```
 
@@ -362,7 +362,7 @@ escape dejan todo como estaba. Y en un `-p`, donde no hay nadie a quien
 preguntar, no corre: eso es lo que se quiere antes de ejecutar algo que nadie va
 a ver.
 
-Mientras corre, el aviso entra en la propia barra —` MI MESA v1.8.0 · BACKEND_LANZADERA
+Mientras corre, el aviso entra en la propia barra —` MI MESA v1.8.1 · BACKEND_LANZADERA
 · REGENERANDO… `— y se queda con el sitio del botón: un control que se deja
 pulsar y no hace nada se pulsa tres veces. Al acabar, la mesa se relee en el
 momento. Si el guion falla, su primera línea de error sale debajo en
@@ -588,7 +588,7 @@ las dos se verían apagadas**: están en un solo sitio cada una, al final de
 
 ```bash
 claude plugin validate .            # manifiesto y módulo, como los lee el motor
-claude plugin test .                # 96 tests
+claude plugin test .                # 97 tests
 ```
 
 Para los tipos hace falta que el motor haya cargado el mod alguna vez desde su

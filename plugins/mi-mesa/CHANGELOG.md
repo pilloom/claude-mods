@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.8.1] — 2026-11-13
+
+### Nadie desaparece de la pista
+
+- Dos personas sin cierres y con distintos abiertos (`0/1` y `0/50`) están las
+  dos al 0 %, pero se trataban como dos corredores: el segundo no cabía en la
+  salida, perdía la cifra y su tortuga, al chocar con la del primero, no se
+  pintaba. Pasaba en la mesa real de backend. Ahora se agrupa por lo que se
+  pinta —la cifra y el sitio— y salen como una tortuga `0×2`, como cualquier
+  otro empate.
+
 ## [1.8.0] — 2026-11-13
 
 ### La meta de la carrera es vaciar tu mesa
