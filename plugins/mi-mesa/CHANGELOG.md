@@ -1,5 +1,21 @@
 # Changelog
 
+## [1.8.0] — 2026-11-13
+
+### La meta de la carrera es vaciar tu mesa
+
+- Hasta la 1.7 la meta la marcaba el líder, así que quien corría solo llegaba
+  siempre: 16 cerrados con 75 abiertos, y en la meta. Ahora cada persona avanza
+  según **cerrados contra cerrados más abiertos**, y solo llega quien deja su
+  mesa vacía. Encima sigue la cifra de cerrados; el avance lo dice la posición.
+- Contrato nuevo en `## Pulso`: dorsales `cerrados/abiertos`
+  (`carrera: 18/2 16/75 4/36`) y `pendientes`, lo abierto a tu nombre, que es lo
+  que te distingue de otra persona con tus mismos cierres. Siempre sin nombres.
+- La liebre es de quien va más avanzado. Quien corre solo no la lleva salvo que
+  haya vaciado su mesa.
+- Los guiones de la 1.7 (`carrera: 21 18 3`, solo cerrados) se siguen pintando
+  con la meta en el líder: nada se rompe mientras se portan.
+
 ## [1.7.1] — 2026-11-13
 
 ### La carrera de una sola persona se perdía

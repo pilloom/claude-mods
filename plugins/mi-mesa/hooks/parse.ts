@@ -1,4 +1,4 @@
-import type { Hilo, Mesa, Notas, Prompt, Pulso, Ticket } from '../types'
+import type { Dorsal, Hilo, Mesa, Notas, Prompt, Pulso, Ticket } from '../types'
 
 /**
  * Una línea de ticket: la marca de estado y todo lo que viene detrás.
@@ -421,8 +421,11 @@ const CIFRA = /^\s*([a-z]+)\s*:\s*(-?\d+)\s*$/iu
 /** El tramo, que es la única que no es un número: `tramo: MAR-LUN`. */
 const TRAMO = /^\s*tramo\s*:\s*([\w-]{1,12})\s*$/iu
 
-/** Los cierres de cada persona, sin nombres: `carrera: 21 18 11 7 3`. */
-const CARRERA = /^\s*carrera\s*:\s*(\d+(?:[\s,]+\d+)*)\s*$/iu
+/**
+ * Un dorsal por persona, sin nombres: `carrera: 16/75 9/1 4/36` —cerrados y
+ * abiertos— o, en los guiones de la 1.7, solo los cerrados: `carrera: 21 18 3`.
+ */
+const CARRERA = /^\s*carrera\s*:\s*(\d+(?:\/\d+)?(?:[\s,]+\d+(?:\/\d+)?)*)\s*$/iu
 
 /**
  * Lee el marcador de la semana de la sección `## Pulso` de la mesa.
@@ -441,7 +444,7 @@ export function parsePulso(text: string): Pulso | undefined {
   let dentro = false
   const n = new Map<string, number>()
   let tramo: string | undefined
-  let carrera: number[] | undefined
+  let carrera: Dorsal[] | undefined
   for (const raw of text.split('\n')) {
     const line = raw.trimEnd()
     if (PULSO_H.test(line)) {
@@ -456,7 +459,10 @@ export function parsePulso(text: string): Pulso | undefined {
     // que no lo vio ningún test.
     const c = CARRERA.exec(line)
     if (c) {
-      carrera = (c[1] ?? '').split(/[\s,]+/u).map(Number)
+      carrera = (c[1] ?? '').split(/[\s,]+/u).map(t => {
+        const [cerrados = 0, abiertos] = t.split('/').map(Number)
+        return abiertos === undefined ? { cerrados } : { cerrados, abiertos }
+      })
       continue
     }
     const cifra = CIFRA.exec(line)
@@ -479,6 +485,7 @@ export function parsePulso(text: string): Pulso | undefined {
   const tuyos = si('tuyos', 0)
   const puesto = si('puesto', 1)
   const personas = si('personas', 1)
+  const pendientes = si('pendientes', 0)
   return {
     abren,
     cierran,
@@ -486,6 +493,7 @@ export function parsePulso(text: string): Pulso | undefined {
     ...(tuyos === undefined ? {} : { tuyos }),
     ...(puesto === undefined ? {} : { puesto }),
     ...(personas === undefined ? {} : { personas }),
+    ...(pendientes === undefined ? {} : { pendientes }),
     ...(tramo === undefined ? {} : { tramo }),
     ...(carrera === undefined ? {} : { carrera }),
   }
@@ -514,9 +522,11 @@ const PISTA_MIN = 20
  * voltear un glifo. Así corren hacia donde miran.
  *
  * Cómo se reparte:
- * - Cada animal a la distancia de la meta que le toca **en proporción al
- *   líder**, que llega a la meta. La liebre es del líder, y de todos los que
- *   empaten en cabeza; el resto, tortugas.
+ * - Cada animal a la distancia de la meta que le toca **según lo que lleva de
+ *   su mesa**: cerrados contra cerrados más abiertos. Solo llega quien la
+ *   vacía. Si el guion no escribe los abiertos, en proporción al líder.
+ * - Encima va la cifra de **cerrados**; el avance lo dice la posición. La
+ *   liebre es de quien va más avanzado, y de todos los que empaten ahí.
  * - **Tú vas donde te toca, siempre.** Quien te pisa se aparta: los que van
  *   detrás de ti —y los que empatan contigo, como el empate con la banca—
  *   **retroceden** hacia la salida, y los que van delante se apartan **hacia la
@@ -529,36 +539,55 @@ const PISTA_MIN = 20
  *
  * No pasa de `width - 1` columnas, contando los emojis a dos.
  */
-export function carreraDe(cifras: readonly number[], yo: number, width: number): Carrera | undefined {
+export function carreraDe(dorsales: readonly Dorsal[], yo: Dorsal, width: number): Carrera | undefined {
   const W = width - 1
   const T = W - anchoEnTerminal(META) - anchoEnTerminal(SALIDA)
-  if (T < PISTA_MIN || cifras.length === 0 || yo < 0) return undefined
-  const mx = Math.max(...cifras, yo)
+  if (T < PISTA_MIN || dorsales.length === 0 || yo.cerrados < 0) return undefined
   // Sin un solo cierre no hay carrera: todos en la salida no dicen nada.
+  const mx = Math.max(...dorsales.map(d => d.cerrados), yo.cerrados)
   if (mx <= 0) return undefined
+  /**
+   * 🔑 **La meta es vaciar tu mesa** cuando el guion escribe los abiertos de
+   * cada uno: el avance es lo cerrado contra todo lo que tenías —cerrado más
+   * abierto—, así que solo llega quien deja su mesa vacía. Con la meta en el
+   * líder, quien corría solo llegaba siempre, aunque le quedaran 75 abiertos.
+   * Sin los abiertos —guiones de la 1.7— la meta sigue siendo el líder.
+   */
+  const deMesa = yo.abiertos !== undefined && dorsales.every(d => d.abiertos !== undefined)
+  const avance = (d: Dorsal): number => {
+    if (!deMesa) return d.cerrados / mx
+    const total = d.cerrados + (d.abiertos ?? 0)
+    return total === 0 ? 0 : d.cerrados / total
+  }
   const ultimo = T - 2
-  const ideal = (c: number) => Math.round((1 - c / mx) * ultimo)
+  const ideal = (p: number) => Math.round((1 - p) * ultimo)
+  const mismo = (a: Dorsal, b: Dorsal) => a.cerrados === b.cerrados && (!deMesa || a.abiertos === b.abiertos)
 
-  type Corredor = { c: number; tu: boolean; x: number; lab: string; cifra: boolean }
-  const resto = new Map<number, number>()
+  type Corredor = { c: number; p: number; tu: boolean; x: number; lab: string; cifra: boolean }
+  const resto = new Map<string, { d: Dorsal; n: number }>()
   let quitado = false
-  for (const c of cifras) {
-    // Una de las cifras iguales a la tuya eres tú; si el guion no te puso, se
-    // te añade igual: tus cierres ya los dice `tuyos`.
-    if (c === yo && !quitado) {
+  for (const d of dorsales) {
+    // Uno de los dorsales iguales al tuyo eres tú; si el guion no te puso, se
+    // te añade igual: tu dorsal ya lo dicen `tuyos` y `pendientes`.
+    if (!quitado && mismo(d, yo)) {
       quitado = true
       continue
     }
-    resto.set(c, (resto.get(c) ?? 0) + 1)
+    const k = deMesa ? `${d.cerrados}/${d.abiertos}` : String(d.cerrados)
+    const prev = resto.get(k)
+    resto.set(k, { d, n: (prev?.n ?? 0) + 1 })
   }
-  const tu: Corredor = { c: yo, tu: true, x: ideal(yo), lab: `${yo} (Tú)`, cifra: true }
-  const otros: Corredor[] = [...resto].map(([c, n]) => ({
-    c,
+  const pYo = avance(yo)
+  const tu: Corredor = { c: yo.cerrados, p: pYo, tu: true, x: ideal(pYo), lab: `${yo.cerrados} (Tú)`, cifra: true }
+  const otros: Corredor[] = [...resto.values()].map(({ d, n }) => ({
+    c: d.cerrados,
+    p: avance(d),
     tu: false,
-    x: ideal(c),
-    lab: n > 1 ? `${c}×${n}` : String(c),
+    x: ideal(avance(d)),
+    lab: n > 1 ? `${d.cerrados}×${n}` : String(d.cerrados),
     cifra: true,
   }))
+  const pMax = Math.max(pYo, ...otros.map(o => o.p))
 
   /** Dónde empieza la etiqueta, en columnas desde el borde izquierdo. */
   const inicio = (r: Corredor): number => {
@@ -577,23 +606,23 @@ export function carreraDe(cifras: readonly number[], yo: number, width: number):
 
   // Detrás de ti, y los que empatan contigo: hacia la salida.
   let fin = tramo(tu)[1]
-  for (const r of otros.filter(o => o.c <= yo).sort((a, b) => b.c - a.c)) {
+  for (const r of otros.filter(o => o.p <= pYo).sort((a, b) => b.p - a.p)) {
     r.x = Math.max(r.x, fin + 1 - 2)
     if (r.x > ultimo || tramo(r)[0] <= fin) {
       r.cifra = false
-      r.x = ideal(r.c)
+      r.x = ideal(r.p)
       continue
     }
     fin = tramo(r)[1]
   }
   // Delante de ti: hacia la meta.
   let ini = tramo(tu)[0]
-  for (const r of otros.filter(o => o.c > yo).sort((a, b) => a.c - b.c)) {
+  for (const r of otros.filter(o => o.p > pYo).sort((a, b) => a.p - b.p)) {
     const largo = Math.max(r.lab.length, 2)
     r.x = Math.min(r.x, ini - 1 - largo - 2)
     if (r.x < 0 || tramo(r)[1] >= ini) {
       r.cifra = false
-      r.x = ideal(r.c)
+      r.x = ideal(r.p)
       continue
     }
     ini = tramo(r)[0]
@@ -609,7 +638,10 @@ export function carreraDe(cifras: readonly number[], yo: number, width: number):
     if (tomadas.has(x) || tomadas.has(x + 1)) continue
     tomadas.add(x)
     tomadas.add(x + 1)
-    pista[x] = r.c === mx ? '🐇' : '🐢'
+    // Quien corre solo no va «en cabeza» de nadie: la liebre solo es suya si
+    // vació la mesa. Si no, una liebre a un 18 % del camino diría que va bien.
+    const liebre = r.p === pMax && (otros.length > 0 || r.p >= 1)
+    pista[x] = liebre ? '🐇' : '🐢'
     pista[x + 1] = ''
     if (!r.cifra) continue
     const i = inicio(r)

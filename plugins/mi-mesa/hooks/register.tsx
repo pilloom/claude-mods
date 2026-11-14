@@ -760,7 +760,13 @@ export const register: Register = (on, options) => {
      */
     const posible =
       m.pulso?.carrera !== undefined && m.pulso.tuyos !== undefined
-        ? carreraDe(m.pulso.carrera, m.pulso.tuyos, width)
+        ? carreraDe(
+            m.pulso.carrera,
+            m.pulso.pendientes === undefined
+              ? { cerrados: m.pulso.tuyos }
+              : { cerrados: m.pulso.tuyos, abiertos: m.pulso.pendientes },
+            width,
+          )
         : undefined
     // Cuatro filas: las tres de la carrera y la raya que la separa de la mesa,
     // como la de los mensajes; sin ella, al desplazar, la mesa parecía

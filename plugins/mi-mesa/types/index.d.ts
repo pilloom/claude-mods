@@ -120,6 +120,13 @@ export type NotaInput = {
  * todavía no escriba la sección no gana un marcador en blanco, se pinta como
  * siempre. La misma regla que la columna del tipo y la de quién lo tiene.
  */
+/**
+ * El dorsal de una persona en la carrera: lo que cerró en el tramo y, si el
+ * guion lo escribe, lo que le sigue abierto. Con `abiertos` la meta es **vaciar
+ * tu mesa**; sin él —guiones de la 1.7— la meta la marca el líder.
+ */
+export type Dorsal = { cerrados: number; abiertos?: number }
+
 export type Pulso = {
   /** Tickets creados en el tramo. */
   abren: number
@@ -150,15 +157,22 @@ export type Pulso = {
   /** Entre cuántas personas, para que el puesto signifique algo. */
   personas?: number
   /**
-   * Los cierres de cada persona del Team en el tramo, **sin nombres**: una
-   * cifra por persona, la tuya incluida, con el mismo criterio que `cierran`.
+   * Lo que sigue abierto a tu nombre, con el mismo criterio que `tuyos`: es la
+   * otra mitad de tu dorsal en la carrera (`tuyos/pendientes`) y lo que te
+   * distingue de otra persona que cerró lo mismo que tú.
+   */
+  pendientes?: number
+  /**
+   * Un dorsal por persona del Team, **sin nombres**, la tuya incluida: lo que
+   * cerró en el tramo y, desde la 1.8.0, lo que le sigue abierto
+   * (`carrera: 16/75 9/1 4/36`).
    *
    * Es lo que pinta la carrera del pie de la mesa. Va sin nombres por la misma
    * razón que el marcador: la comparación motiva y la lista de quién va último
    * señala. Lo único con nombre en la pista es tu animal, y se encuentra por
-   * `tuyos`, así que sin `tuyos` no hay carrera.
+   * `tuyos` (y `pendientes`), así que sin `tuyos` no hay carrera.
    */
-  carrera?: number[]
+  carrera?: Dorsal[]
   /**
    * Qué tramo cuentan las cifras, **como la mesa lo nombre**: `MAR-LUN` la
    * semana entera, `MAR-JUE` un jueves por la tarde.

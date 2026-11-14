@@ -503,24 +503,82 @@ test('sin dueño ni emoji la línea sale como siempre', () => {
   expect(lineaDeTicket(t, 80)).toEqual('▶ LAN-2669 ALTA corto')
 })
 
+/** Un dorsal escrito como en el fichero: `16` o `16/75`. */
+function dorsal(s: number | string): { cerrados: number; abiertos?: number } {
+  const [c = 0, a] = String(s).split('/').map(Number)
+  return a === undefined ? { cerrados: c } : { cerrados: c, abiertos: a }
+}
+
 /** Las tres filas de la carrera como texto plano, para compararlas de un vistazo. */
-function plana(cifras: readonly number[], yo: number, width = 65): string[] {
-  const c = carreraDe(cifras, yo, width)
+function plana(cifras: readonly (number | string)[], yo: number | string, width = 65): string[] {
+  const c = carreraDe(cifras.map(dorsal), dorsal(yo), width)
   if (!c) return []
   const t = (f: { text: string }[]) => f.map(x => x.text).join('')
   return [t(c.cifras), t(c.flechas), c.pista]
 }
 
 test('parsePulso lee la carrera, sin nombres', () => {
-  expect(parsePulso('## Pulso\nabren: 4\ncierran: 9\ntuyos: 2\ncarrera: 5 2 1\n')?.carrera).toEqual([5, 2, 1])
+  expect(parsePulso('## Pulso\nabren: 4\ncierran: 9\ntuyos: 2\ncarrera: 5 2 1\n')?.carrera).toEqual([
+    { cerrados: 5 },
+    { cerrados: 2 },
+    { cerrados: 1 },
+  ])
   expect(parsePulso('## Pulso\nabren: 4\ncierran: 9\ncarrera: Ana 5\n')?.carrera).toBeUndefined()
+})
+
+test('parsePulso lee los dorsales con sus abiertos, y tus pendientes', () => {
+  const p = parsePulso('## Pulso\nabren: 4\ncierran: 9\ntuyos: 16\npendientes: 75\ncarrera: 16/75 9/1\n')
+  expect(p?.carrera).toEqual([
+    { cerrados: 16, abiertos: 75 },
+    { cerrados: 9, abiertos: 1 },
+  ])
+  expect(p?.pendientes).toBe(75)
 })
 
 test('parsePulso lee la carrera de una sola persona, que también parece una cifra', () => {
   // `carrera: 16` casa con la regla de las cifras; leída ahí, la carrera se perdía.
   const p = parsePulso('## Pulso\nabren: 16\ncierran: 16\ntuyos: 16\npersonas: 1\ncarrera: 16\n')
-  expect(p?.carrera).toEqual([16])
+  expect(p?.carrera).toEqual([{ cerrados: 16 }])
   expect(p).not.toHaveProperty('carrera', 16)
+})
+
+test('carreraDe con abiertos: solo, con la mesa llena, no llegas a la meta', () => {
+  // 16 cerrados y 75 abiertos: un 18 % del camino, cerca del semáforo.
+  const [cifras, flechas, pista] = plana(['16/75'], '16/75')
+  expect(cifras?.trimStart()).toBe('16 (Tú)')
+  expect(cifras?.indexOf('16')).toBeGreaterThan(40)
+  expect(flechas?.indexOf('▼')).toBe(cifras?.indexOf('16'))
+  // Solo y sin vaciar la mesa no hay liebre: no vas en cabeza de nadie.
+  expect(pista).not.toContain('🐇')
+  expect(pista?.startsWith('🏁─')).toBe(true)
+})
+
+test('carreraDe con abiertos: solo llega a la meta quien vacía su mesa', () => {
+  const [, , pista] = plana(['5/0'], '5/0')
+  expect(pista?.startsWith('🏁🐇')).toBe(true)
+})
+
+test('carreraDe con abiertos: el orden es de avance, no de cierres', () => {
+  // 9/1 va al 90 %, tú 16/75 al 18 %, y 4/36 al 10 %: más cierres no es ir delante.
+  const [cifras, , pista] = plana(['9/1', '16/75', '4/36'], '16/75')
+  const i9 = cifras?.indexOf('9') ?? -1
+  const iTu = cifras?.indexOf('16 (Tú)') ?? -1
+  const i4 = cifras?.lastIndexOf('4') ?? -1
+  expect(i9).toBeLessThan(iTu)
+  expect(iTu).toBeLessThan(i4)
+  // La liebre es del más avanzado, aunque cerrara menos que tú.
+  expect(pista?.indexOf('🐇')).toBeLessThan(pista?.indexOf('🐢') ?? 0)
+})
+
+test('carreraDe con abiertos: quien cerró lo mismo que tú con otra mesa no eres tú', () => {
+  const [cifras] = plana(['16/75', '16/4'], '16/75')
+  expect(cifras).toContain('16 (Tú)')
+  expect(cifras?.replace('16 (Tú)', '')).toContain('16')
+})
+
+test('carreraDe: sin los abiertos de todos, la meta vuelve a ser el líder', () => {
+  // Un guion de la 1.7 mezclado: sin abiertos de alguien no se puede medir su mesa.
+  expect(plana([21, '18/40'], '18/40')[0]).toBe(plana([21, 18], 18)[0])
 })
 
 test('carreraDe: un solo corredor eres tú, con la liebre en la meta', () => {
@@ -558,6 +616,6 @@ test('carreraDe: pegada a la salida tu etiqueta se lee al revés', () => {
 
 test('carreraDe: si vas primero la liebre es tuya; sin cierres o sin ancho no hay carrera', () => {
   expect(plana([21, 15, 11], 21)[0]?.startsWith('  21 (Tú)')).toBe(true)
-  expect(carreraDe([0, 0], 0, 65)).toBeUndefined()
-  expect(carreraDe([5, 3], 3, 20)).toBeUndefined()
+  expect(plana([0, 0], 0)).toEqual([])
+  expect(plana([5, 3], 3, 20)).toEqual([])
 })
