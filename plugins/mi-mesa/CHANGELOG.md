@@ -1,5 +1,26 @@
 # Changelog
 
+## [1.7.0] — 2026-11-13
+
+### La carrera de la semana
+
+- Al pie de la mesa, encima de los mensajes, **los cierres de cada persona del
+  Team como una carrera**: una pista con 🏁 a la izquierda y 🚦 a la derecha, un
+  animal por persona y encima su flecha `▼` y su cifra. La liebre 🐇 es del
+  líder; el resto, tortugas 🐢.
+- **Sin nombres, salvo el tuyo** (`18 (Tú)`), por la misma razón que el
+  marcador: la comparación motiva y la lista de quién va último señala. El
+  guion escribe solo cifras —`carrera: 21 18 11 7 3`—, así que los nombres no
+  llegan al fichero.
+- **La pista va al revés**, meta a la izquierda: 🐇 y 🐢 miran a la izquierda en
+  macOS y el terminal no puede voltearlos.
+- Tú vas siempre donde te toca: los de detrás y los que empatan contigo
+  retroceden, los de delante se apartan hacia la meta, y los demás empates son
+  una tortuga con `7×2`. Pegada a la salida tu etiqueta se lee `(Tú) 0`.
+- Cuatro filas —una raya y las tres de la carrera— que paga la mesa y que se
+  quedan fijas al desplazarla. Si a la mesa no le quedan tres filas de tickets,
+  la carrera no se pinta. Una mesa sin `carrera:` se ve como antes.
+
 ## [1.6.1] — 2026-11-13
 
 ### Ninguna fila pasa del ancho, y el marcador no se pierde

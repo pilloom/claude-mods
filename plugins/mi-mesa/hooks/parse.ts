@@ -421,6 +421,9 @@ const CIFRA = /^\s*([a-z]+)\s*:\s*(-?\d+)\s*$/iu
 /** El tramo, que es la única que no es un número: `tramo: MAR-LUN`. */
 const TRAMO = /^\s*tramo\s*:\s*([\w-]{1,12})\s*$/iu
 
+/** Los cierres de cada persona, sin nombres: `carrera: 21 18 11 7 3`. */
+const CARRERA = /^\s*carrera\s*:\s*(\d+(?:[\s,]+\d+)*)\s*$/iu
+
 /**
  * Lee el marcador de la semana de la sección `## Pulso` de la mesa.
  *
@@ -438,6 +441,7 @@ export function parsePulso(text: string): Pulso | undefined {
   let dentro = false
   const n = new Map<string, number>()
   let tramo: string | undefined
+  let carrera: number[] | undefined
   for (const raw of text.split('\n')) {
     const line = raw.trimEnd()
     if (PULSO_H.test(line)) {
@@ -452,7 +456,12 @@ export function parsePulso(text: string): Pulso | undefined {
       continue
     }
     const t = TRAMO.exec(line)
-    if (t) tramo = t[1]
+    if (t) {
+      tramo = t[1]
+      continue
+    }
+    const c = CARRERA.exec(line)
+    if (c) carrera = (c[1] ?? '').split(/[\s,]+/u).map(Number)
   }
   const abren = n.get('abren')
   const cierran = n.get('cierran')
@@ -474,7 +483,153 @@ export function parsePulso(text: string): Pulso | undefined {
     ...(puesto === undefined ? {} : { puesto }),
     ...(personas === undefined ? {} : { personas }),
     ...(tramo === undefined ? {} : { tramo }),
+    ...(carrera === undefined ? {} : { carrera }),
   }
+}
+
+/** Un trozo de una fila de la carrera; `tu` lo que va en negritas. */
+export type Tramo = { text: string; tu?: boolean }
+
+/** Las tres filas de la carrera, de arriba abajo. */
+export type Carrera = { cifras: Tramo[]; flechas: Tramo[]; pista: string }
+
+/** La meta y la salida, en los extremos de la pista. */
+const META = '🏁'
+const SALIDA = '🚦'
+
+/** Lo menos que tiene que medir la pista para que la carrera diga algo. */
+const PISTA_MIN = 20
+
+/**
+ * La carrera de la semana: una sola pista, con la meta a la izquierda y la
+ * salida a la derecha, y en ella un animal por cifra con su flecha y su número
+ * encima. Devuelve nada cuando no hay con qué pintarla.
+ *
+ * 🔑 **La pista va al revés —meta a la izquierda— por los emojis**: 🐇 y 🐢
+ * miran a la izquierda en la fuente de emojis de macOS, y un terminal no puede
+ * voltear un glifo. Así corren hacia donde miran.
+ *
+ * Cómo se reparte:
+ * - Cada animal a la distancia de la meta que le toca **en proporción al
+ *   líder**, que llega a la meta. La liebre es del líder, y de todos los que
+ *   empaten en cabeza; el resto, tortugas.
+ * - **Tú vas donde te toca, siempre.** Quien te pisa se aparta: los que van
+ *   detrás de ti —y los que empatan contigo, como el empate con la banca—
+ *   **retroceden** hacia la salida, y los que van delante se apartan **hacia la
+ *   meta**, porque retrocederlos los pondría detrás de ti con más cierres.
+ * - Los demás que empatan entre sí son **una sola tortuga**, con `7×2`.
+ * - Pegada a la salida, tu etiqueta crece hacia la meta y se lee `(Tú) 0`,
+ *   para que la flecha siga cayendo debajo de la cifra.
+ * - Si al apartarse alguien no cabe, pierde su cifra y su flecha antes que
+ *   pisar la tuya; su animal se queda en su sitio si está libre.
+ *
+ * No pasa de `width - 1` columnas, contando los emojis a dos.
+ */
+export function carreraDe(cifras: readonly number[], yo: number, width: number): Carrera | undefined {
+  const W = width - 1
+  const T = W - anchoEnTerminal(META) - anchoEnTerminal(SALIDA)
+  if (T < PISTA_MIN || cifras.length === 0 || yo < 0) return undefined
+  const mx = Math.max(...cifras, yo)
+  // Sin un solo cierre no hay carrera: todos en la salida no dicen nada.
+  if (mx <= 0) return undefined
+  const ultimo = T - 2
+  const ideal = (c: number) => Math.round((1 - c / mx) * ultimo)
+
+  type Corredor = { c: number; tu: boolean; x: number; lab: string; cifra: boolean }
+  const resto = new Map<number, number>()
+  let quitado = false
+  for (const c of cifras) {
+    // Una de las cifras iguales a la tuya eres tú; si el guion no te puso, se
+    // te añade igual: tus cierres ya los dice `tuyos`.
+    if (c === yo && !quitado) {
+      quitado = true
+      continue
+    }
+    resto.set(c, (resto.get(c) ?? 0) + 1)
+  }
+  const tu: Corredor = { c: yo, tu: true, x: ideal(yo), lab: `${yo} (Tú)`, cifra: true }
+  const otros: Corredor[] = [...resto].map(([c, n]) => ({
+    c,
+    tu: false,
+    x: ideal(c),
+    lab: n > 1 ? `${c}×${n}` : String(c),
+    cifra: true,
+  }))
+
+  /** Dónde empieza la etiqueta, en columnas desde el borde izquierdo. */
+  const inicio = (r: Corredor): number => {
+    const x = 2 + r.x
+    if (x + r.lab.length <= W) return x
+    // Pegada a la salida: crece hacia la meta y la cifra queda sobre la flecha.
+    if (r.tu) r.lab = `(Tú) ${r.c}`
+    return Math.min(x, W - r.lab.length)
+  }
+  /** Lo que ocupa en la fila de cifras y en la pista: `[desde, hasta)`. */
+  const tramo = (r: Corredor): [number, number] => {
+    const i = inicio(r)
+    const desde = Math.min(i, 2 + r.x)
+    return [desde, Math.max(i + r.lab.length, 2 + r.x + 2)]
+  }
+
+  // Detrás de ti, y los que empatan contigo: hacia la salida.
+  let fin = tramo(tu)[1]
+  for (const r of otros.filter(o => o.c <= yo).sort((a, b) => b.c - a.c)) {
+    r.x = Math.max(r.x, fin + 1 - 2)
+    if (r.x > ultimo || tramo(r)[0] <= fin) {
+      r.cifra = false
+      r.x = ideal(r.c)
+      continue
+    }
+    fin = tramo(r)[1]
+  }
+  // Delante de ti: hacia la meta.
+  let ini = tramo(tu)[0]
+  for (const r of otros.filter(o => o.c > yo).sort((a, b) => a.c - b.c)) {
+    const largo = Math.max(r.lab.length, 2)
+    r.x = Math.min(r.x, ini - 1 - largo - 2)
+    if (r.x < 0 || tramo(r)[1] >= ini) {
+      r.cifra = false
+      r.x = ideal(r.c)
+      continue
+    }
+    ini = tramo(r)[0]
+  }
+
+  const pista: string[] = Array.from({ length: T }, () => '─')
+  const tomadas = new Set<number>()
+  const fila: (Tramo | undefined)[] = Array.from({ length: W }, () => undefined)
+  const flechas: (Tramo | undefined)[] = Array.from({ length: W }, () => undefined)
+  // Tú primero, para que nada pise lo tuyo.
+  for (const r of [tu, ...otros]) {
+    const x = Math.max(0, Math.min(r.x, ultimo))
+    if (tomadas.has(x) || tomadas.has(x + 1)) continue
+    tomadas.add(x)
+    tomadas.add(x + 1)
+    pista[x] = r.c === mx ? '🐇' : '🐢'
+    pista[x + 1] = ''
+    if (!r.cifra) continue
+    const i = inicio(r)
+    for (let k = 0; k < r.lab.length; k++) {
+      const ch = r.lab[k]
+      if (ch !== undefined && i + k < W) fila[i + k] = { text: ch, tu: r.tu }
+    }
+    flechas[2 + x] = { text: '▼', tu: r.tu }
+  }
+  return { cifras: juntar(fila), flechas: juntar(flechas), pista: `${META}${pista.join('')}${SALIDA}` }
+}
+
+/** Junta las celdas en trozos del mismo peso, sin espacios colgando al final. */
+function juntar(celdas: readonly (Tramo | undefined)[]): Tramo[] {
+  const out: Tramo[] = []
+  for (const c of celdas) {
+    const t = c ?? { text: ' ' }
+    const prev = out[out.length - 1]
+    if (prev && !!prev.tu === !!t.tu) prev.text += t.text
+    else out.push(t.tu ? { text: t.text, tu: true } : { text: t.text })
+  }
+  const last = out[out.length - 1]
+  if (last) last.text = last.text.trimEnd()
+  return out.filter(t => t.text.length > 0)
 }
 
 /** Un trozo de la línea del marcador, con el papel que hace en ella. */

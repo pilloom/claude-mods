@@ -150,6 +150,16 @@ export type Pulso = {
   /** Entre cuántas personas, para que el puesto signifique algo. */
   personas?: number
   /**
+   * Los cierres de cada persona del Team en el tramo, **sin nombres**: una
+   * cifra por persona, la tuya incluida, con el mismo criterio que `cierran`.
+   *
+   * Es lo que pinta la carrera del pie de la mesa. Va sin nombres por la misma
+   * razón que el marcador: la comparación motiva y la lista de quién va último
+   * señala. Lo único con nombre en la pista es tu animal, y se encuentra por
+   * `tuyos`, así que sin `tuyos` no hay carrera.
+   */
+  carrera?: number[]
+  /**
    * Qué tramo cuentan las cifras, **como la mesa lo nombre**: `MAR-LUN` la
    * semana entera, `MAR-JUE` un jueves por la tarde.
    *

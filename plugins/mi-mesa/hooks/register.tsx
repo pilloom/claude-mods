@@ -4,6 +4,7 @@ import type { EngineInterface, Register, RenderElement } from 'claude-code'
 import type { Mesa, Notas, Prompt, Regen } from '../types'
 import {
   anadirNota,
+  carreraDe,
   comandoDe,
   envolver,
   GUIONES,
@@ -748,9 +749,27 @@ export const register: Register = (on, options) => {
     // cada error que haya. Contarla de menos corre la ventana una fila y la
     // última línea de la mesa se pierde por debajo del corte.
     const cabecera = 2 + (marcador.length > 0 ? 1 : 0) + (m.error ? 1 : 0) + (reg.error ? 1 : 0)
+    /**
+     * La carrera de la semana, al pie de la mesa: tres filas —cifras, flechas
+     * y pista— más la raya que la separa, que salen de la ventana de la mesa,
+     * no de los mensajes.
+     *
+     * Solo si la mesa trae los cierres de cada persona y los tuyos, y solo si
+     * a la mesa le siguen quedando 3 filas de tickets: la mesa manda sobre la
+     * carrera, y en un panel bajo la carrera se cae entera, no a medias.
+     */
+    const posible =
+      m.pulso?.carrera !== undefined && m.pulso.tuyos !== undefined
+        ? carreraDe(m.pulso.carrera, m.pulso.tuyos, width)
+        : undefined
+    // Cuatro filas: las tres de la carrera y la raya que la separa de la mesa,
+    // como la de los mensajes; sin ella, al desplazar, la mesa parecía
+    // montarse en la carrera.
+    const carrera = posible && (arriba === undefined || arriba - cabecera - 4 >= 3) ? posible : undefined
+    const altoCarrera = carrera ? 4 : 0
     // Sin filas conocidas —un test, una superficie que no manda las props— no
     // hay reparto y no hay ventana: la mesa se pinta entera, como siempre.
-    const visibles = arriba === undefined ? filas.length : Math.max(1, arriba - cabecera)
+    const visibles = arriba === undefined ? filas.length : Math.max(1, arriba - cabecera - altoCarrera)
     const desde = Math.min(Math.max(0, mirilla), Math.max(0, filas.length - visibles))
     const ventana = filas.slice(desde, desde + visibles)
     // Dónde está la ventana, y solo cuando sobra mesa: un `12-20/40` en la
@@ -983,6 +1002,33 @@ export const register: Register = (on, options) => {
             </Box>
           ) : null}
           {ventana}
+          {/* La carrera, pegada al fondo de la caja de la mesa —el hueco de
+              encima crece— para que se quede justo encima de la raya de los
+              mensajes aunque la mesa tenga pocos tickets, y fija mientras la
+              ventana se desplaza: es el pie de la mesa, no una fila más.
+              Las cifras de los demás van apagadas y las tuyas en negritas y
+              sin color, como lo tuyo en el marcador; nunca las dos cosas a la
+              vez en el mismo texto, que `bold` y `dimColor` se pelean. */}
+          {carrera ? <Box key="hueco-carrera" flexGrow={1} /> : null}
+          {carrera ? (
+            <Box key="carrera" flexDirection="column" flexShrink={0}>
+              {/* La misma raya fina que separa los mensajes: la carrera es
+                  otra sección, y una fila en blanco no lo decía al desplazar. */}
+              <Text key="raya-carrera" color="black">
+                {'─'.repeat(width)}
+              </Text>
+              {[carrera.cifras, carrera.flechas].map((fila, i) => (
+                <Box key={`carrera-${i}`} flexDirection="row">
+                  {fila.map((t, j) => (
+                    <Text key={`c-${i}-${j}`} {...(t.tu ? { bold: true } : { dimColor: true })}>
+                      {t.text}
+                    </Text>
+                  ))}
+                </Box>
+              ))}
+              <Text key="pista">{carrera.pista}</Text>
+            </Box>
+          ) : null}
         </Box>
         <Box flexDirection="column" height={abajo || undefined} overflow="hidden" flexShrink={0}>
           {/* Una raya fina, no una fila con el fondo pintado: esa salía gruesa.

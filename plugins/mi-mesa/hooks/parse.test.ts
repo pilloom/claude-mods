@@ -3,6 +3,7 @@ import { expect, test } from 'claude-code/testing'
 import {
   anadirNota,
   anchoEnTerminal,
+  carreraDe,
   comandoDe,
   envolver,
   lineaDeTicket,
@@ -500,4 +501,51 @@ test('la línea de un ticket con dueño largo nunca pasa del ancho', () => {
 test('sin dueño ni emoji la línea sale como siempre', () => {
   const t = { mark: '▶', key: 'LAN-2669', priority: 'ALTA', summary: 'corto', otherThreads: '' }
   expect(lineaDeTicket(t, 80)).toEqual('▶ LAN-2669 ALTA corto')
+})
+
+/** Las tres filas de la carrera como texto plano, para compararlas de un vistazo. */
+function plana(cifras: readonly number[], yo: number, width = 65): string[] {
+  const c = carreraDe(cifras, yo, width)
+  if (!c) return []
+  const t = (f: { text: string }[]) => f.map(x => x.text).join('')
+  return [t(c.cifras), t(c.flechas), c.pista]
+}
+
+test('parsePulso lee la carrera, sin nombres', () => {
+  expect(parsePulso('## Pulso\nabren: 4\ncierran: 9\ntuyos: 2\ncarrera: 5 2 1\n')?.carrera).toEqual([5, 2, 1])
+  expect(parsePulso('## Pulso\nabren: 4\ncierran: 9\ncarrera: Ana 5\n')?.carrera).toBeUndefined()
+})
+
+test('carreraDe: la liebre en la meta, tú donde te toca, y nada pasa del ancho', () => {
+  const [cifras, flechas, pista] = plana([21, 18, 11, 7, 3], 18)
+  expect(cifras).toBe('  21      18 (Tú)             11         7          3')
+  expect(flechas).toBe('  ▼       ▼                   ▼          ▼          ▼')
+  expect(pista?.startsWith('🏁🐇')).toBe(true)
+  expect(pista?.endsWith('🚦')).toBe(true)
+  for (const f of [cifras, flechas, pista]) expect(anchoEnTerminal(f ?? '')).toBeLessThan(65)
+})
+
+test('carreraDe: quien empata contigo o va pegado detrás retrocede', () => {
+  expect(plana([21, 18, 18, 11, 7, 3], 18)[0]).toBe('  21      18 (Tú) 18          11         7          3')
+  expect(plana([21, 18, 17, 11, 7, 3], 18)[0]).toBe('  21      18 (Tú) 17          11         7          3')
+})
+
+test('carreraDe: quien va pegado delante se aparta hacia la meta', () => {
+  expect(plana([21, 19, 18, 11, 7, 3], 18)[0]).toBe('  21   19 18 (Tú)             11         7          3')
+})
+
+test('carreraDe: los demás que empatan son una tortuga con ×n', () => {
+  expect(plana([21, 18, 11, 7, 7, 3], 18)[0]).toBe('  21      18 (Tú)             11         7×2        3')
+})
+
+test('carreraDe: pegada a la salida tu etiqueta se lee al revés', () => {
+  const [cifras, , pista] = plana([21, 15, 11, 7, 0], 0)
+  expect(cifras?.endsWith('(Tú) 0')).toBe(true)
+  expect(pista?.endsWith('🐢🚦')).toBe(true)
+})
+
+test('carreraDe: si vas primero la liebre es tuya; sin cierres o sin ancho no hay carrera', () => {
+  expect(plana([21, 15, 11], 21)[0]?.startsWith('  21 (Tú)')).toBe(true)
+  expect(carreraDe([0, 0], 0, 65)).toBeUndefined()
+  expect(carreraDe([5, 3], 3, 20)).toBeUndefined()
 })
