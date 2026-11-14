@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.7.1] — 2026-11-13
+
+### La carrera de una sola persona se perdía
+
+- Con un Team de una sola persona el guion escribe `carrera: 16`, y esa línea
+  casaba antes con la regla de las cifras (`abren: 4`, `tuyos: 16`…): se
+  guardaba como una cifra más y la carrera no se pintaba. Con dos o más cifras
+  no pasaba, así que ningún test lo vio. Era el caso real de backend,
+  ibaker-graphql e ibaker-movil. Ahora la línea `carrera:` se mira primero.
+  Lo encontró la sesión de backend al regenerar su mesa.
+
 ## [1.7.0] — 2026-11-13
 
 ### La carrera de la semana
