@@ -450,18 +450,22 @@ export function parsePulso(text: string): Pulso | undefined {
     }
     if (dentro && SECCION.test(line)) break
     if (!dentro) continue
+    // 🔴 La carrera antes que las cifras: `carrera: 16` —un Team de una sola
+    // persona— también casa con `CIFRA`, y leída ahí se guardaba como una cifra
+    // más y la carrera se perdía. Con dos o más cifras no pasaba, que es por lo
+    // que no lo vio ningún test.
+    const c = CARRERA.exec(line)
+    if (c) {
+      carrera = (c[1] ?? '').split(/[\s,]+/u).map(Number)
+      continue
+    }
     const cifra = CIFRA.exec(line)
     if (cifra) {
       n.set((cifra[1] ?? '').toLowerCase(), Number(cifra[2]))
       continue
     }
     const t = TRAMO.exec(line)
-    if (t) {
-      tramo = t[1]
-      continue
-    }
-    const c = CARRERA.exec(line)
-    if (c) carrera = (c[1] ?? '').split(/[\s,]+/u).map(Number)
+    if (t) tramo = t[1]
   }
   const abren = n.get('abren')
   const cierran = n.get('cierran')

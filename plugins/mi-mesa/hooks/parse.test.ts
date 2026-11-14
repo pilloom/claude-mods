@@ -516,6 +516,18 @@ test('parsePulso lee la carrera, sin nombres', () => {
   expect(parsePulso('## Pulso\nabren: 4\ncierran: 9\ncarrera: Ana 5\n')?.carrera).toBeUndefined()
 })
 
+test('parsePulso lee la carrera de una sola persona, que también parece una cifra', () => {
+  // `carrera: 16` casa con la regla de las cifras; leída ahí, la carrera se perdía.
+  const p = parsePulso('## Pulso\nabren: 16\ncierran: 16\ntuyos: 16\npersonas: 1\ncarrera: 16\n')
+  expect(p?.carrera).toEqual([16])
+  expect(p).not.toHaveProperty('carrera', 16)
+})
+
+test('carreraDe: un solo corredor eres tú, con la liebre en la meta', () => {
+  expect(plana([16], 16)[0]).toBe('  16 (Tú)')
+  expect(plana([16], 16)[2]?.startsWith('🏁🐇')).toBe(true)
+})
+
 test('carreraDe: la liebre en la meta, tú donde te toca, y nada pasa del ancho', () => {
   const [cifras, flechas, pista] = plana([21, 18, 11, 7, 3], 18)
   expect(cifras).toBe('  21      18 (Tú)             11         7          3')
