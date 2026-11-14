@@ -11,7 +11,7 @@ acaba de contestar.
 × • Pedir las claves de staging a
     Marta antes del jueves
 × • El deploy del viernes no va
- MI MESA v1.7.1 · BACKEND_LANZADERA
+ MI MESA v1.8.0 · BACKEND_LANZADERA
 12 tickets · 5 hilos · 1-5/22 · generada 2026-10-08          ▲ ▼
 SEMANA MAR-LUN  + 64 ▏- 57 ▏▼7 ▏tú 18 · 2.º/9
 
@@ -248,9 +248,26 @@ cada uno su flecha y su cifra.
 ```
 
 Cuenta **lo mismo que el marcador**: el mismo tramo de martes a lunes, sin
-subtareas y por asignado al cerrarse. Cada animal va a la distancia de la meta
-que le toca **en proporción al líder**, que llega a ella. La liebre es del
-líder —y de todos los que empaten en cabeza—; el resto, tortugas.
+subtareas y por asignado al cerrarse.
+
+🔑 **La meta es vaciar tu mesa** (desde la 1.8.0). Cada animal avanza según lo
+que lleva despachado de su carga: **cerrados contra cerrados más abiertos**.
+Solo llega a la meta quien deja su mesa vacía. Hasta la 1.7 la meta la marcaba
+el líder, y quien corría solo llegaba siempre —16 cerrados con 75 abiertos y en
+la meta—, que no es verdad. Encima de cada animal sigue la cifra de
+**cerrados**; el avance lo dice la posición, así que quien cerró 3 de 6 va por
+delante de quien cerró 16 de 91.
+
+```
+  18        3            12                  16 (Tú)       4
+  ▼         ▼            ▼                   ▼             ▼
+🏁─🐇──────────────────🐢─────────🐢────────────────🐢─────🐢───🚦
+   18/2 90 %     3/3 50 %   12/20 38 %          16/75 18 %   4/36 10 %
+```
+
+La liebre es de quien va más avanzado —y de todos los que empaten ahí—; el
+resto, tortugas. **Quien corre solo no lleva liebre** salvo que haya vaciado su
+mesa: una liebre al 18 % del camino diría que va bien.
 
 🔑 **Sin nombres, salvo el tuyo.** Es la misma decisión que el marcador: la
 comparación motiva y la lista de quién va último señala. Ves a cuánto estás del
@@ -285,18 +302,32 @@ mida 20 columnas. Los emojis se cuentan a dos columnas, y ninguna fila pasa de
 
 ### Lo que el guion tiene que escribir
 
-Una línea más en la sección `## Pulso`: **una cifra por persona**, la tuya
-incluida, en cualquier orden.
+Dos líneas más en la sección `## Pulso`: **un dorsal por persona**, la tuya
+incluida y en cualquier orden, con lo que cerró en el tramo y lo que le sigue
+abierto; y `pendientes`, lo que sigue abierto a tu nombre.
 
 ```
-tuyos: 18
-carrera: 21 18 11 7 3
+tuyos: 16
+pendientes: 75
+carrera: 18/2 16/75 12/20 4/36 3/3
 ```
+
+Los abiertos cuentan con el mismo criterio que los cerrados —asignado, sin
+subtareas, sin épicas— y **todo lo abierto**, no solo lo que está en tu mesa
+por un hilo activo: de los demás el guion no sabe qué hilos tienen. Quien tiene
+abiertos y no cerró nada también corre, pegado a la salida.
+
+Tu dorsal se encuentra por `tuyos/pendientes`, así que otra persona que cerró lo
+mismo que tú no se confunde contigo. Si el guion no te puso, el panel te añade
+igual: tu dorsal ya lo dicen esas dos claves.
+
+**Los guiones de la 1.7 siguen valiendo**: `carrera: 21 18 11 7 3`, solo
+cerrados, se pinta con la meta en el líder, igual que entonces. Basta con que a
+un dorsal le falten los abiertos —o falte `pendientes`— para volver a esa regla:
+sin los abiertos de alguien no se puede medir su mesa.
 
 Sin `carrera` o sin `tuyos` no hay carrera, y la mesa se pinta como antes, sin
-hueco. Si no cerraste nada y el guion no te puso, el panel te añade con `0`: lo
-tuyo ya lo dice `tuyos`. Una línea con algo que no sea un número —un nombre— no
-se lee.
+hueco. Una línea con algo que no sea un número —un nombre— no se lee.
 
 ## Regenerar la mesa
 
@@ -305,7 +336,7 @@ en la barra del título, pegada a su borde derecho, para correrlo sin salir de l
 sesión:
 
 ```
- MI MESA v1.7.1 · BACKEND_LANZADERA                 ↻
+ MI MESA v1.8.0 · BACKEND_LANZADERA                 ↻
 2 tickets · 2 hilos · generada 2026-10-29
 ```
 
@@ -331,7 +362,7 @@ escape dejan todo como estaba. Y en un `-p`, donde no hay nadie a quien
 preguntar, no corre: eso es lo que se quiere antes de ejecutar algo que nadie va
 a ver.
 
-Mientras corre, el aviso entra en la propia barra —` MI MESA v1.7.1 · BACKEND_LANZADERA
+Mientras corre, el aviso entra en la propia barra —` MI MESA v1.8.0 · BACKEND_LANZADERA
 · REGENERANDO… `— y se queda con el sitio del botón: un control que se deja
 pulsar y no hace nada se pulsa tres veces. Al acabar, la mesa se relee en el
 momento. Si el guion falla, su primera línea de error sale debajo en
@@ -557,7 +588,7 @@ las dos se verían apagadas**: están en un solo sitio cada una, al final de
 
 ```bash
 claude plugin validate .            # manifiesto y módulo, como los lee el motor
-claude plugin test .                # 90 tests
+claude plugin test .                # 96 tests
 ```
 
 Para los tipos hace falta que el motor haya cargado el mod alguna vez desde su
