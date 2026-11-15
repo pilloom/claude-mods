@@ -17,6 +17,9 @@ import {
   recortar,
   trozosDePulso,
 } from './parse'
+import { generar } from './generador'
+import type { ConfigJira } from './generador'
+import { clienteJira } from './jira'
 
 const PANE = 'mi-mesa'
 const MESA_FILE = 'docs/MI-MESA.md'
@@ -120,6 +123,36 @@ function filasDeMesa(m: Mesa): number {
  */
 let configurado: string | undefined
 
+/**
+ * El Jira del generador del mod, si se puso en `/config` (desde la 1.10.0).
+ *
+ * Con él puesto la `↻` no corre ningún guion del repositorio: pide a Jira y
+ * escribe la mesa el propio mod. Es lo que hace que una actualización desde el
+ * marketplace traiga el pulso nuevo a quien tiene en su repo una copia vieja
+ * del guion, que no se actualiza con el mod. `undefined` si no se configuró;
+ * mal configurado sí vale —que la `↻` diga qué falta es mejor que no salir—.
+ */
+let jira: ConfigJira | undefined
+
+/** Lee de `/config` el Jira del generador; sin URL ni proyecto, no hay generador. */
+function jiraDe(options: Readonly<Record<string, unknown>>): ConfigJira | undefined {
+  const s = (k: string) => (typeof options[k] === 'string' ? (options[k] as string).trim() : '')
+  const url = s('jiraUrl')
+  const proyecto = s('jiraProyecto').toUpperCase()
+  if (!url || !proyecto) return undefined
+  return {
+    url,
+    email: s('jiraEmail'),
+    token: s('jiraToken'),
+    proyecto,
+    team: s('jiraTeam'),
+    noHilos: s('etiquetasNoHilo')
+      .split(',')
+      .map(e => e.trim().toLowerCase())
+      .filter(Boolean),
+  }
+}
+
 // La mesa es la del repo en el que corre la sesión: backend, front o el que
 // tenga su docs/MI-MESA.md. El título del panel lleva el nombre de esa carpeta.
 async function repoOf($: EngineInterface): Promise<{ root: string; repo: string; file: string }> {
@@ -174,9 +207,14 @@ async function refreshGuion($: EngineInterface, enCabecera?: string): Promise<vo
   // debajo: el `refresh` de después de regenerar pasa por aquí, y lo que se
   // está ejecutando —o lo que se acaba de preguntar— manda.
   if (prev.fase !== 'quieto') return
-  const guion = await buscarGuion($, [configurado, enCabecera, ...GUIONES])
-  if (guion === prev.guion) return
-  await update($, regen, r => ({ ...r, guion }))
+  // El guion de `/config` manda, que es explícito; después el generador del
+  // mod, **antes** que la cabecera: la copia vieja del guion se sigue nombrando
+  // en la cabecera de la mesa que escribe, y es justo la que hay que saltarse.
+  const puesto = await buscarGuion($, [configurado])
+  const interno = puesto === undefined && jira !== undefined
+  const guion = puesto ?? (interno ? undefined : await buscarGuion($, [enCabecera, ...GUIONES]))
+  if (guion === prev.guion && interno === (prev.interno === true)) return
+  await update($, regen, r => ({ fase: r.fase, ...(r.error ? { error: r.error } : {}), guion, ...(interno ? { interno } : {}) }))
 }
 
 /** La primera de las rutas candidatas que se acepta y además está en disco. */
@@ -219,11 +257,12 @@ async function buscarGuion(
 async function regenerar($: EngineInterface): Promise<void> {
   const { root } = await repoOf($)
   const prev = await read($, regen)
+  if (prev.fase === 'quieto' && prev.interno && jira) return regenerarDentro($, root, jira)
   if (prev.fase !== 'quieto' || prev.guion === undefined) return
   const argv = comandoDe(prev.guion)
   if (argv === undefined) return
   await update($, regen, r => ({ fase: 'preguntando' as const, guion: r.guion }))
-  if (!(await confirmar($, argv))) {
+  if (!(await confirmar($, `«${argv.join(' ')}»`))) {
     await update($, regen, r => ({ fase: 'quieto' as const, guion: r.guion }))
     return
   }
@@ -248,6 +287,39 @@ async function regenerar($: EngineInterface): Promise<void> {
 }
 
 /**
+ * Lo mismo que `regenerar`, con el generador del mod en vez de un guion.
+ *
+ * Se pregunta igual —con lo que se va a hacer delante: qué Jira y qué
+ * proyecto— y por la misma razón: escribe un fichero del repositorio. La mesa
+ * se escribe solo si `generar` acabó: un error de Jira deja la de antes puesta
+ * y lo dice en rojo, como un guion que falla.
+ *
+ * El fichero se apunta en `.git/info/exclude`: es por persona, y la primera
+ * mesa de un repositorio que no tenía guion no la ignora nadie más.
+ */
+async function regenerarDentro($: EngineInterface, root: string, cfg: ConfigJira): Promise<void> {
+  const fijo = { interno: true as const }
+  await update($, regen, () => ({ fase: 'preguntando' as const, ...fijo }))
+  const host = cfg.url.replace(/^https:\/\//u, '').replace(/\/.*$/u, '')
+  const ambito = cfg.team ? `${cfg.proyecto}, Team ${cfg.team.slice(0, 8)}…` : cfg.proyecto
+  if (!(await confirmar($, `el generador de mi-mesa (${host} · ${ambito})`))) {
+    await update($, regen, () => ({ fase: 'quieto' as const, ...fijo }))
+    return
+  }
+  await update($, regen, () => ({ fase: 'corriendo' as const, ...fijo }))
+  let error: string | undefined
+  try {
+    const texto = await generar(clienteJira((url, init) => $.http.fetch(url, init), cfg), cfg, new Date())
+    await $.fs.write(`${root}/${MESA_FILE}`, texto)
+    await ignorar($, root, MESA_FILE, 'La mesa de «Mi mesa»: es de quien usa este clon.')
+  } catch (err) {
+    error = err instanceof Error ? err.message : String(err)
+  }
+  await update($, regen, () => ({ fase: 'quieto' as const, ...fijo, ...(error ? { error } : {}) }))
+  await refresh($)
+}
+
+/**
  * Pregunta si se corre el comando, y solo cuenta como sí la opción de correrlo.
  *
  * El diálogo es el del motor (`$.ui.ask`), el mismo con el que se pregunta todo
@@ -255,9 +327,9 @@ async function regenerar($: EngineInterface): Promise<void> {
  * nadie a quien preguntar— revienta, que es exactamente lo que se quiere que
  * pase antes de ejecutar nada sin que nadie lo vea.
  */
-async function confirmar($: EngineInterface, argv: readonly string[]): Promise<boolean> {
+async function confirmar($: EngineInterface, con: string): Promise<boolean> {
   try {
-    const dicho = await $.ui.ask(`¿Regenerar la mesa con «${argv.join(' ')}»?`, {
+    const dicho = await $.ui.ask(`¿Regenerar la mesa con ${con}?`, {
       options: [CONFIRMA, 'Dejarlo'],
       header: 'Mi mesa',
     })
@@ -312,9 +384,15 @@ async function refreshNotas($: EngineInterface): Promise<void> {
  * submódulo), una carpeta sin permiso o un sitio que no es un repositorio
  * dejan el post-it funcionando igual, solo que sin proteger.
  */
-async function ignorar($: EngineInterface, root: string): Promise<void> {
-  const dicho = (texto: string) =>
-    texto.split('\n').some(l => l.trim() === EXCLUDE_LINEA || l.trim() === NOTAS_FILE)
+async function ignorar(
+  $: EngineInterface,
+  root: string,
+  fichero: string = NOTAS_FILE,
+  comentario = 'El post-it de «Mi mesa»: notas de quien usa este clon.',
+): Promise<void> {
+  // Con la barra delante: el de la raíz y no uno igual de cualquier carpeta.
+  const linea = fichero === NOTAS_FILE ? EXCLUDE_LINEA : `/${fichero}`
+  const dicho = (texto: string) => texto.split('\n').some(l => l.trim() === linea || l.trim() === fichero)
   try {
     if (!(await $.fs.exists(`${root}/.git/info`))) return
     const gitignore = `${root}/.gitignore`
@@ -323,10 +401,7 @@ async function ignorar($: EngineInterface, root: string): Promise<void> {
     const antes = (await $.fs.exists(file)) ? await $.fs.read(file) : ''
     if (dicho(antes)) return
     const salto = antes === '' || antes.endsWith('\n') ? '' : '\n'
-    await $.fs.write(
-      file,
-      `${antes}${salto}# El post-it de «Mi mesa»: notas de quien usa este clon.\n${EXCLUDE_LINEA}\n`,
-    )
+    await $.fs.write(file, `${antes}${salto}# ${comentario}\n${linea}\n`)
   } catch {
     // Sin poder apuntarlo, el post-it sigue; lo que no hay es la protección.
   }
@@ -483,6 +558,7 @@ export const register: Register = (on, options) => {
   // El guion de la mesa, si se puso: lo normal es que no y manden la cabecera
   // del fichero y la convención. Se guarda crudo; `comandoDe` decide si vale.
   configurado = typeof options.generador === 'string' ? options.generador.trim() : undefined
+  jira = jiraDe(options)
 
   on('session.start', async ($, e, next) => {
     await $.command.register({
@@ -664,7 +740,7 @@ export const register: Register = (on, options) => {
      * espacios. Cero cuando no hay botón —sin guion, o con el guion
      * corriendo—, y entonces la barra vuelve a ser de ancho completo.
      */
-    const hueco = reg.fase === 'quieto' && reg.guion !== undefined ? 3 : 0
+    const hueco = reg.fase === 'quieto' && (reg.guion !== undefined || reg.interno) ? 3 : 0
     // El post-it se queda las filas que necesite —una por nota, más la del
     // rótulo— y el resto se reparte como antes. Lo que no cabe no se recorta a
     // la mitad: se dice cuántas notas quedan sin pintar, y el fichero se abre
@@ -748,7 +824,18 @@ export const register: Register = (on, options) => {
     // del título, la línea de la cuenta, la del marcador si lo hay y la de
     // cada error que haya. Contarla de menos corre la ventana una fila y la
     // última línea de la mesa se pierde por debajo del corte.
-    const cabecera = 2 + (marcador.length > 0 ? 1 : 0) + (m.error ? 1 : 0) + (reg.error ? 1 : 0)
+    /**
+     * La pista de cómo tener el pulso, cuando la mesa no lo trae y el
+     * generador del mod no está puesto (1.10.0).
+     *
+     * Quien actualizaba el mod desde el marketplace y tenía en su repo una
+     * copia vieja del guion se quedaba sin marcador ni carrera, y nada en el
+     * panel le decía por qué ni qué hacer. Una línea, apagada, y solo en ese
+     * caso: con el generador puesto la `↻` ya es la respuesta.
+     */
+    const pista = !m.pulso && !reg.interno ? 'Sin pulso: pon tu Jira en /config → mi-mesa y la ↻ lo generará' : ''
+    const cabecera =
+      2 + (marcador.length > 0 ? 1 : 0) + (m.error ? 1 : 0) + (reg.error ? 1 : 0) + (pista ? 1 : 0)
     /**
      * La carrera de la semana, al pie de la mesa: tres filas —cifras, flechas
      * y pista— más la raya que la separa, que salen de la ventana de la mesa,
@@ -1001,6 +1088,11 @@ export const register: Register = (on, options) => {
           {m.error ? (
             <Box key="error-mesa" flexShrink={0}>
               <Text color="red">{recortar(m.error, width)}</Text>
+            </Box>
+          ) : null}
+          {pista ? (
+            <Box key="pista" flexShrink={0}>
+              <Text dimColor>{recortar(pista, width)}</Text>
             </Box>
           ) : null}
           {reg.error ? (

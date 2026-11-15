@@ -65,6 +65,12 @@ export type Regen = {
    * que no puede hacer nada.
    */
   guion?: string
+  /**
+   * La `↻` usa el generador del propio mod y no un guion (desde la 1.10.0): es
+   * lo que hay cuando `/config` trae el Jira y no un guion propio. Sin `guion`
+   * y sin esto, no hay botón.
+   */
+  interno?: true
   /** Lo que falló la última vez, para decirlo donde se dice el de la mesa. */
   error?: string
 }
