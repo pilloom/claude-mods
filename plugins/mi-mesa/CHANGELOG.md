@@ -1,5 +1,25 @@
 # Changelog
 
+## [1.10.0] — 2026-11-15
+
+### El mod trae su propio generador de la mesa
+
+- Actualizar el mod desde el marketplace no traía el pulso a quien tenía en su
+  repo una copia vieja del guion `listar-mi-mesa`: el guion vive copiado en
+  cada repositorio y la actualización no le llega. Ahora el mod genera la mesa
+  él mismo contra Jira Cloud, y cada versión nueva lo trae puesto.
+- Se configura en `/config`: URL, correo, API token —**sensible**, al
+  almacenamiento seguro—, proyecto y, opcionales, el UUID del Team y las
+  etiquetas que no son hilo. Con eso la `↻` usa el generador del mod **antes**
+  que la cabecera del fichero, que es la que seguía nombrando la copia vieja.
+- Genérico para otras instancias e idiomas: lo hecho, las subtareas, las
+  épicas y el campo Team se reconocen por estructura, no por nombre. Contra
+  LAN y el Team de backend da el mismo pulso, cifra a cifra, que el guion de
+  backend_lanzadera.
+- Sin pulso y sin Jira configurado, el panel lo dice en una línea apagada y
+  dice cómo tenerlo.
+- Si Jira falla, el error sale en rojo y la mesa de antes se queda.
+
 ## [1.9.0] — 2026-11-15
 
 ### La meta de la carrera es el trabajo del Team

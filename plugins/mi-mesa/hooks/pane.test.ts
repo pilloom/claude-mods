@@ -716,6 +716,118 @@ test('el guion de /config manda sobre la cabecera y sobre la convención', { opt
   await ui.unmount()
 })
 
+/** El Jira del generador del mod, como lo dejaría `/config`. */
+const CON_JIRA = {
+  jiraUrl: 'https://equipo.atlassian.net',
+  jiraEmail: 'yo@equipo.test',
+  jiraToken: 'secreto',
+  jiraProyecto: 'abc',
+}
+
+/** Un issue de Jira con lo que lee el generador. */
+function issue(
+  key: string,
+  quien: string | undefined,
+  extra: { labels?: string[]; enCurso?: boolean; subtarea?: boolean } = {},
+): object {
+  return {
+    key,
+    fields: {
+      summary: `Lo de ${key}`,
+      labels: extra.labels ?? [],
+      updated: '2026-11-14T10:00:00.000+0100',
+      priority: { name: 'High' },
+      status: { statusCategory: { key: extra.enCurso ? 'indeterminate' : 'new' } },
+      issuetype: { name: extra.subtarea ? 'Sub-task' : 'Task', subtask: extra.subtarea === true, hierarchyLevel: extra.subtarea ? -1 : 0 },
+      assignee: quien === undefined ? null : { accountId: quien, displayName: quien === 'yo' ? 'Yo' : 'Ana' },
+    },
+  }
+}
+
+/**
+ * Un Jira Cloud falso detrás de `$.http.fetch`, que contesta por la consulta.
+ *
+ * Lo que devuelve es pequeño y con las cuentas hechas a mano: 2 cierres míos y
+ * 1 de Ana (más una subtarea, que no cuenta), 1 abierto mío, 1 de Ana y 1 sin
+ * asignar. Así el pulso tiene que salir `carrera: 2/1 1/1` y `meta: 6`.
+ */
+function conJiraFalso(on: On, status = 200): string[] {
+  const pedidas: string[] = []
+  on('http.fetch', async (_, e) => {
+    pedidas.push(e.url)
+    const responde = (cuerpo: unknown) => ({
+      value: { status, ok: status === 200, headers: {}, text: status === 200 ? JSON.stringify(cuerpo) : '{}' },
+    })
+    if (e.url.endsWith('/rest/api/3/myself')) return responde({ accountId: 'yo', displayName: 'Yo' })
+    // El cuerpo puede llegar como texto o como base64; el generador manda texto.
+    const body = e.init?.body
+    const jql = String((JSON.parse(typeof body === 'string' ? body : '{}') as { jql?: string }).jql ?? '')
+    if (jql.includes('currentUser()'))
+      return responde({ isLast: true, issues: [issue('ABC-1', 'yo', { labels: ['pagos'], enCurso: true }), issue('ABC-2', 'ana')] })
+    if (jql.includes('created >='))
+      return responde({ isLast: true, issues: [issue('ABC-9', 'ana')] })
+    if (jql.includes('resolutiondate'))
+      return responde({
+        isLast: true,
+        issues: [issue('ABC-3', 'yo'), issue('ABC-4', 'yo'), issue('ABC-5', 'ana'), issue('ABC-6', 'yo', { subtarea: true })],
+      })
+    return responde({ isLast: true, issues: [issue('ABC-1', 'yo'), issue('ABC-7', 'ana'), issue('ABC-8', undefined)] })
+  })
+  return pedidas
+}
+
+test('con Jira en /config la ↻ usa el generador del mod, aunque la cabecera nombre una copia vieja', { options: CON_JIRA }, async ($, on) => {
+  // La copia vieja: está en disco y la cabecera la nombra, pero no escribe pulso.
+  const disco = ficheros(on, ROOT, MD)
+  disco.set(GUION, '// la copia de antes del pulso')
+  abre(on)
+  const corridos = conGuion(on, disco)
+  const preguntas = contesta(on, 'Regenerar')
+  const pedidas = conJiraFalso(on)
+  await $.command.run({ command: 'mi-mesa', args: '' } as never)
+  const ui = await $.ui.mount({ plugin: 'mi-mesa', surface: 'terminal', component: 'Pane', requestId: 'mi-mesa', props: {} as never })
+  await ui.press({ key: 'regenerar' })
+  expect(preguntas).toEqual(['¿Regenerar la mesa con el generador de mi-mesa (equipo.atlassian.net · ABC)?'])
+  // Ningún guion: el de la cabecera no corre.
+  expect(corridos.filter(c => c[0] === 'node')).toEqual([])
+  expect(pedidas.every(u => u.startsWith('https://equipo.atlassian.net/rest/api/3/'))).toBe(true)
+  const escrita = disco.get(MESA_FILE) ?? ''
+  expect(escrita).toContain('**Generado** por `mi-mesa`')
+  expect(escrita).toContain('carrera: 2/1 1/1')
+  expect(escrita).toContain('meta: 6')
+  expect(escrita).toContain('tuyos: 2')
+  // La mesa es por persona: queda fuera de git en este clon.
+  expect(disco.get(`${ROOT}/.git/info/exclude`) ?? '').toContain('/docs/MI-MESA.md')
+  // El panel ya enseña la mesa nueva, sin guion, con su ticket y sin la pista.
+  expect(await ui.find({ type: 'Text', text: /▶ ✅ ABC-1 ALTA Lo de ABC-1/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /Sin pulso/ })).toBeUndefined()
+  await ui.unmount()
+})
+
+test('si Jira rechaza el token, el panel lo dice y la mesa de antes se queda', { options: CON_JIRA }, async ($, on) => {
+  const disco = ficheros(on, ROOT, MD)
+  abre(on)
+  conGuion(on, disco)
+  contesta(on, 'Regenerar')
+  conJiraFalso(on, 401)
+  await $.command.run({ command: 'mi-mesa', args: '' } as never)
+  const ui = await $.ui.mount({ plugin: 'mi-mesa', surface: 'terminal', component: 'Pane', requestId: 'mi-mesa', props: {} as never })
+  await ui.press({ key: 'regenerar' })
+  expect(await ui.find({ type: 'Text', text: /no acepta el correo y el token/ })).toBeDefined()
+  expect(disco.get(MESA_FILE)).toEqual(MD)
+  await ui.unmount()
+})
+
+test('sin pulso y sin Jira en /config, el panel dice cómo tenerlo', async ($, on) => {
+  ficheros(on, ROOT, MD)
+  sinGit(on)
+  abre(on)
+  await $.command.run({ command: 'mi-mesa', args: '' } as never)
+  const ui = await $.ui.mount({ plugin: 'mi-mesa', surface: 'terminal', component: 'Pane', requestId: 'mi-mesa', props: {} as never })
+  expect(await ui.find({ type: 'Text', text: /Sin pulso: pon tu Jira en \/config/ })).toBeDefined()
+  await ui.unmount()
+})
+
 test('decir que no deja la mesa como estaba y no corre nada', async ($, on) => {
   const disco = ficheros(on, ROOT, MD)
   disco.set(GUION, '// el guion de este repo')
@@ -964,7 +1076,9 @@ test('sin la sección del pulso el panel no deja la fila en blanco', async ($, o
  * `pon`, que es como lo reescribe el guion de verdad: los hooks del disco en
  * memoria se registran una vez por test, antes de la primera llamada a `$`.
  */
-test('el marcador le cuesta a la mesa una fila, y la cuenta lo dice', async ($, on) => {
+// Con el Jira del generador puesto, para que la mesa sin pulso no lleve la
+// pista: la pista también cuesta una fila, y aquí se mide solo el marcador.
+test('el marcador le cuesta a la mesa una fila, y la cuenta lo dice', { options: CON_JIRA }, async ($, on) => {
   const lineas = ['> 🤖 **Generado** por `scripts/qa/listar-mi-mesa.js` el 2026-10-07, para **X**.', '']
   for (let i = 0; i < 6; i++) {
     lineas.push(`## hilo-${i} (1) — hoy`, '', '```', `·  LAN-${100 + i}  med  Lo que sea del hilo ${i}`, '```', '')

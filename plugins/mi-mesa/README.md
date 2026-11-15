@@ -46,6 +46,11 @@ escribe él: lo lee, y la **`↻`** del panel corre ese guion por ti. En un repo
 que no lo tenga, el panel lo dice con el nombre del repo en lugar de salir en
 blanco.
 
+**Sin guion en el repo, o con una copia vieja que no escribe el pulso**, el mod
+trae el suyo desde la 1.10.0: pon tu Jira en `/config` y la `↻` escribe la mesa
+—con pulso y carrera— sin guion de por medio. Ver
+[El generador del mod](#el-generador-del-mod).
+
 El panel se abre solo al empezar la sesión, y a mano con `/mi-mesa`.
 
 ## Cómo lee lo que lee
@@ -403,12 +408,16 @@ lectura.
 
 **El guion no hay que configurarlo**: el fichero generado se autodeclara en su
 cabecera —«🤖 **Generado** por `scripts/qa/listar-mi-mesa.js` el …»—, y de ahí
-sale. Tres fuentes, en este orden:
+sale. Cuatro fuentes, en este orden:
 
 1. Lo que se haya puesto en `/config` (**Guion que regenera la mesa**), para el
    repositorio que lo tenga en otro sitio.
-2. La cabecera de `docs/MI-MESA.md`, que es lo normal.
-3. La convención: `scripts/qa/listar-mi-mesa.js` o `tool/listar_mi_mesa.dart`.
+2. **El generador del mod**, si `/config` trae tu Jira (desde la 1.10.0). Va
+   antes que la cabecera a propósito: una copia vieja del guion se sigue
+   nombrando en la cabecera de la mesa que escribe, y es justo la que hay que
+   saltarse.
+3. La cabecera de `docs/MI-MESA.md`, que es lo normal.
+4. La convención: `scripts/qa/listar-mi-mesa.js` o `tool/listar_mi_mesa.dart`.
    Es lo que hace que el botón salga **antes de la primera generación**, que es
    cuando no hay cabecera que leer y cuando más falta hace.
 
@@ -431,6 +440,57 @@ diga la cabecera, sino lo que pasa un filtro cerrado (`comandoDe`):
 
 Lo peor que puede pasar al pulsar es que corra un guion del propio repositorio,
 que es el que ya se corre a mano —y antes de eso hay que decir que sí—.
+
+## El generador del mod
+
+Los guiones `listar-mi-mesa` viven **copiados** en cada repositorio, así que
+actualizar el mod desde el marketplace no les llega: quien tenía una copia de
+antes del pulso se quedaba sin marcador ni carrera, y el panel no decía por
+qué. Desde la 1.10.0 el mod trae su propio generador, y cada versión nueva lo
+trae puesto.
+
+Se activa en `/config` → **mi-mesa**:
+
+| Campo | Qué poner |
+| --- | --- |
+| **Jira: URL** | `https://<instancia>.atlassian.net` |
+| **Jira: correo** | el de tu cuenta de Jira |
+| **Jira: API token** | uno de id.atlassian.com → Seguridad → API tokens. Es un campo **sensible**: se guarda en el almacenamiento seguro, no en `settings.json` |
+| **Jira: proyecto** | la clave, p. ej. `ABC` |
+| **Jira: Team (UUID)** | opcional. El UUID que sale en la URL de la página del Team. Vacío: el proyecto entero |
+| **Jira: etiquetas que no son hilo** | opcional, separadas por comas: áreas o componentes que no son un hilo de trabajo |
+
+Con URL y proyecto puestos, la `↻` pregunta con lo que va a hacer delante
+—«¿Regenerar la mesa con el generador de mi-mesa (instancia · ABC)?»—, pide a
+Jira, escribe `docs/MI-MESA.md` y lo apunta en `.git/info/exclude`, porque la
+mesa es por persona. Si Jira falla —el token, la URL, un Team que no existe—,
+el error sale en rojo y **la mesa de antes se queda**.
+
+Mientras la mesa no traiga pulso y no esté puesto el Jira, el panel lo dice en
+una línea apagada bajo la cuenta: `Sin pulso: pon tu Jira en /config → mi-mesa
+y la ↻ lo generará`.
+
+**Lo decide por estructura, no por nombre**, porque lo usan equipos con su
+propia instancia y en su idioma: lo hecho es `statusCategory`, la subtarea es
+`issuetype.subtask`, la épica es `hierarchyLevel` y el campo Team se busca por
+su tipo (`atlassian-team`) y no por un `customfield_10001` que es de una
+instancia. Los nombres solo eligen el emoji del tipo y la prioridad corta, que
+es lo único que puede fallar sin mentir: sale `❔`.
+
+Qué escribe:
+
+- **La mesa**: lo abierto que tienes asignado o creaste, sin épicas, agrupado
+  por etiqueta. Cada ticket va una vez, en su hilo más grande, y los otros
+  salen con `+`. Lo que no tiene etiqueta va a `sin hilo`, y las etiquetas que
+  empiezan por `bloqueado` o `blocked` marcan `🚧` en vez de hacer hilo.
+- **El pulso y la carrera**, con el contrato de arriba y las mismas cuentas
+  que el guion de backend. Contra la misma instancia, el mismo proyecto y el
+  mismo Team, salen las mismas cifras.
+- **Lo que NO está aquí**: tus épicas y los abiertos sin asignar, contados.
+
+Lo que **no** hace, a propósito: la ventana de 14 días de actividad y los hilos
+«dormidos» del guion de backend. La mesa del mod lista todo lo abierto tuyo.
+Solo habla con **Jira Cloud** (API v3, `search/jql`).
 
 ## El post-it
 

@@ -1,7 +1,7 @@
 {
   "name": "mi-mesa",
-  "version": "1.9.0",
-  "description": "Panel con tu mesa de trabajo (docs/MI-MESA.md) agrupada por hilo, el marcador de la semana —lo que se abre contra lo que se cierra—, la carrera del Team al pie, sin nombres, y un botón para regenerarla, el post-it de NOTAS.md —que se escribe pidiéndolo o con /nota— y los últimos mensajes que le pasaste a Claude Code, más un sonido al acabar el turno",
+  "version": "1.10.0",
+  "description": "Panel con tu mesa de trabajo (docs/MI-MESA.md) agrupada por hilo, el marcador de la semana —lo que se abre contra lo que se cierra—, la carrera del Team al pie, sin nombres, y un botón para regenerarla —con el guion del repo o con el generador del propio mod contra tu Jira—, el post-it de NOTAS.md —que se escribe pidiéndolo o con /nota— y los últimos mensajes que le pasaste a Claude Code, más un sonido al acabar el turno",
   "types": "./types/index.d.ts",
   "author": {
     "name": "RBSistemas"
@@ -17,8 +17,45 @@
     "generador": {
       "type": "string",
       "default": "",
-      "description": "Ruta relativa del guion que genera docs/MI-MESA.md, para el botón ↻ del panel. Vacío: se lee de la cabecera del fichero y, si no, de scripts/qa/listar-mi-mesa.js o tool/listar_mi_mesa.dart",
+      "description": "Ruta relativa del guion que genera docs/MI-MESA.md, para el botón ↻ del panel. Vacío: el generador del mod si pusiste tu Jira abajo y, si no, la cabecera del fichero o scripts/qa/listar-mi-mesa.js o tool/listar_mi_mesa.dart",
       "title": "Guion que regenera la mesa"
+    },
+    "jiraUrl": {
+      "type": "string",
+      "default": "",
+      "description": "Generador del mod: la URL de tu Jira Cloud, https://<instancia>.atlassian.net. Con ella y el proyecto, la ↻ escribe la mesa —con pulso y carrera— sin guion en el repo",
+      "title": "Jira: URL"
+    },
+    "jiraEmail": {
+      "type": "string",
+      "default": "",
+      "description": "Generador del mod: el correo de tu cuenta de Jira",
+      "title": "Jira: correo"
+    },
+    "jiraToken": {
+      "type": "string",
+      "default": "",
+      "sensitive": true,
+      "description": "Generador del mod: un API token de Atlassian (id.atlassian.com → Seguridad → API tokens). Se guarda en el almacenamiento seguro, no en settings.json",
+      "title": "Jira: API token"
+    },
+    "jiraProyecto": {
+      "type": "string",
+      "default": "",
+      "description": "Generador del mod: la clave del proyecto de Jira, p. ej. ABC",
+      "title": "Jira: proyecto"
+    },
+    "jiraTeam": {
+      "type": "string",
+      "default": "",
+      "description": "Generador del mod, opcional: el UUID de tu Team (el que sale en la URL de la página del Team). Vacío: el proyecto entero. Por nombre no vale: Jira contesta 0 sin error",
+      "title": "Jira: Team (UUID)"
+    },
+    "etiquetasNoHilo": {
+      "type": "string",
+      "default": "",
+      "description": "Generador del mod, opcional: etiquetas separadas por comas que no forman hilo (áreas, componentes). Las que empiezan por bloqueado o blocked ya no lo forman",
+      "title": "Jira: etiquetas que no son hilo"
     }
   }
 }
