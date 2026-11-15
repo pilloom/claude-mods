@@ -1,5 +1,24 @@
 # Changelog
 
+## [1.9.0] — 2026-11-15
+
+### La meta de la carrera es el trabajo del Team
+
+- Contra la mesa de cada uno la carrera no era pareja: quien tenía 1 abierto y
+  cerró 1 iba al 50 % y se llevaba la liebre, por delante de quien cerró 15
+  con 33 abiertos. Ahora hay **una sola meta para todos**: todo lo que el Team
+  tenía que hacer en el tramo, lo pendiente —sin asignar incluido— más lo
+  cerrado. Cada uno avanza con sus cerrados contra ella, así que delante va
+  quien más cerró, y la distancia a la meta es lo que le queda al Team.
+- Contrato nuevo en `## Pulso`: `meta: N`, que el guion escribe ya sumada. Una
+  meta más corta que los cierres de alguien se recorta al 100 %: nadie la pasa.
+- Sin `meta` se pinta como en la 1.8, contra la mesa de cada uno: nada se rompe
+  mientras se portan los guiones.
+- 🔴 Apiñados cerca de la salida —lo normal con la meta del Team— un corredor
+  que retrocedía para enseñar su cifra se sentaba encima de los de detrás, que
+  desaparecían de la pista. Ahora cada uno deja hueco para los animales que le
+  quedan detrás, y si no cabe su cifra la pierde él, no el animal de otro.
+
 ## [1.8.1] — 2026-11-13
 
 ### Nadie desaparece de la pista

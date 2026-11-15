@@ -163,6 +163,13 @@ export type Pulso = {
    */
   pendientes?: number
   /**
+   * La meta de la carrera (desde la 1.9.0): **todo el trabajo del Team en el
+   * tramo**, lo que sigue sin hacer —sin asignar incluido— más lo cerrado. La
+   * misma para todos, así que cada uno avanza con sus cerrados contra ella y va
+   * delante quien más cerró. Sin `meta`, la carrera mide la mesa de cada uno.
+   */
+  meta?: number
+  /**
    * Un dorsal por persona del Team, **sin nombres**, la tuya incluida: lo que
    * cerró en el tramo y, desde la 1.8.0, lo que le sigue abierto
    * (`carrera: 16/75 9/1 4/36`).

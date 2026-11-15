@@ -510,8 +510,8 @@ function dorsal(s: number | string): { cerrados: number; abiertos?: number } {
 }
 
 /** Las tres filas de la carrera como texto plano, para compararlas de un vistazo. */
-function plana(cifras: readonly (number | string)[], yo: number | string, width = 65): string[] {
-  const c = carreraDe(cifras.map(dorsal), dorsal(yo), width)
+function plana(cifras: readonly (number | string)[], yo: number | string, width = 65, meta?: number): string[] {
+  const c = carreraDe(cifras.map(dorsal), dorsal(yo), width, meta)
   if (!c) return []
   const t = (f: { text: string }[]) => f.map(x => x.text).join('')
   return [t(c.cifras), t(c.flechas), c.pista]
@@ -583,6 +583,47 @@ test('carreraDe con abiertos: los que no cerraron nada son una tortuga, no se pi
   expect(flechas?.split('▼').length).toBe(3)
   expect(pista?.match(/🐢/gu)?.length).toBe(1)
   expect(pista?.endsWith('🐢🚦')).toBe(true)
+})
+
+test('parsePulso lee la meta del Team, y descarta una meta de 0', () => {
+  const p = parsePulso('## Pulso\nabren: 4\ncierran: 9\ntuyos: 15\nmeta: 99\ncarrera: 15/33 0/1 0/50\n')
+  expect(p?.meta).toBe(99)
+  expect(parsePulso('## Pulso\nabren: 4\ncierran: 9\nmeta: 0\n')).not.toHaveProperty('meta')
+})
+
+test('carreraDe con la meta del Team: delante va quien más cerró, no quien menos tenía', () => {
+  // Contra su mesa, 1/1 iba al 50 % y por delante de tus 15/33; contra la meta
+  // del Team va al 1 % y tú al 15 %.
+  const [cifras, , pista] = plana(['15/33', '1/1', '0/50'], '15/33', 160, 99)
+  const iTu = cifras?.indexOf('15 (Tú)') ?? -1
+  const i1 = cifras?.lastIndexOf('1') ?? -1
+  expect(iTu).toBeGreaterThanOrEqual(0)
+  expect(iTu).toBeLessThan(i1)
+  // La liebre es tuya, y ya no estás en la meta: el Team tiene 99 por hacer.
+  expect(pista?.indexOf('🐇')).toBeGreaterThan(5)
+  expect(pista?.indexOf('🐇')).toBeLessThan(pista?.indexOf('🐢') ?? 0)
+})
+
+test('carreraDe con la meta del Team: la misma cifra es el mismo sitio, sea cual sea su mesa', () => {
+  const [cifras, flechas, pista] = plana(['15/33', '3/1', '3/40'], '15/33', 65, 99)
+  expect(cifras).toContain('3×2')
+  expect(flechas?.split('▼').length).toBe(3)
+  expect(pista?.match(/🐢/gu)?.length).toBe(1)
+})
+
+test('carreraDe con la meta del Team: apiñados en la salida, no se pierde ningún animal', () => {
+  // Al 18, 16, 12, 4 y 3 % todos caen en las últimas columnas: el que
+  // retrocedía para enseñar su cifra se sentaba encima de los de detrás.
+  const [cifras, , pista] = plana(['18/2', '16/75', '12/20', '4/36', '3/3'], '16/75', 65, 100)
+  expect(pista?.match(/[🐇🐢]/gu)?.length).toBe(5)
+  expect(cifras).toContain('16 (Tú)')
+})
+
+test('carreraDe con la meta del Team: solo, sin llegar, no hay liebre; nadie pasa la meta', () => {
+  expect(plana(['15/33'], '15/33', 65, 99)[2]).not.toContain('🐇')
+  // Un guion que se queda corto no saca a nadie de la pista: se recorta al 100 %.
+  const [, , pista] = plana(['15/0', '2/0'], '15/0', 65, 10)
+  expect(pista?.startsWith('🏁🐇')).toBe(true)
 })
 
 test('carreraDe: sin los abiertos de todos, la meta vuelve a ser el líder', () => {

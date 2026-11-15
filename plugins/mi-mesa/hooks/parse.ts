@@ -486,6 +486,7 @@ export function parsePulso(text: string): Pulso | undefined {
   const puesto = si('puesto', 1)
   const personas = si('personas', 1)
   const pendientes = si('pendientes', 0)
+  const meta = si('meta', 1)
   return {
     abren,
     cierran,
@@ -494,6 +495,7 @@ export function parsePulso(text: string): Pulso | undefined {
     ...(puesto === undefined ? {} : { puesto }),
     ...(personas === undefined ? {} : { personas }),
     ...(pendientes === undefined ? {} : { pendientes }),
+    ...(meta === undefined ? {} : { meta }),
     ...(tramo === undefined ? {} : { tramo }),
     ...(carrera === undefined ? {} : { carrera }),
   }
@@ -522,9 +524,10 @@ const PISTA_MIN = 20
  * voltear un glifo. Así corren hacia donde miran.
  *
  * Cómo se reparte:
- * - Cada animal a la distancia de la meta que le toca **según lo que lleva de
- *   su mesa**: cerrados contra cerrados más abiertos. Solo llega quien la
- *   vacía. Si el guion no escribe los abiertos, en proporción al líder.
+ * - Cada animal a la distancia de la meta que le toca **según lo que cerró
+ *   contra el trabajo del Team** (`meta`): la misma meta para todos, así que
+ *   va delante quien más cerró. Sin `meta`, contra su propia mesa —cerrados más
+ *   abiertos—, y si tampoco hay abiertos, en proporción al líder.
  * - Encima va la cifra de **cerrados**; el avance lo dice la posición. La
  *   liebre es de quien va más avanzado, y de todos los que empaten ahí.
  * - **Tú vas donde te toca, siempre.** Quien te pisa se aparta: los que van
@@ -539,7 +542,12 @@ const PISTA_MIN = 20
  *
  * No pasa de `width - 1` columnas, contando los emojis a dos.
  */
-export function carreraDe(dorsales: readonly Dorsal[], yo: Dorsal, width: number): Carrera | undefined {
+export function carreraDe(
+  dorsales: readonly Dorsal[],
+  yo: Dorsal,
+  width: number,
+  meta?: number,
+): Carrera | undefined {
   const W = width - 1
   const T = W - anchoEnTerminal(META) - anchoEnTerminal(SALIDA)
   if (T < PISTA_MIN || dorsales.length === 0 || yo.cerrados < 0) return undefined
@@ -552,16 +560,28 @@ export function carreraDe(dorsales: readonly Dorsal[], yo: Dorsal, width: number
    * abierto—, así que solo llega quien deja su mesa vacía. Con la meta en el
    * líder, quien corría solo llegaba siempre, aunque le quedaran 75 abiertos.
    * Sin los abiertos —guiones de la 1.7— la meta sigue siendo el líder.
+   *
+   * 🔑 **Desde la 1.9.0 la meta es del Team** cuando el guion escribe `meta`:
+   * todo lo que el Team tenía que hacer en el tramo —lo pendiente, sin asignar
+   * incluido, más lo cerrado—. Contra la mesa de cada uno no era parejo: quien
+   * tenía 1 abierto y cerró 1 iba al 50 % y se llevaba la liebre, por delante
+   * de quien cerró 15 con 33 abiertos. Con una sola meta, delante va quien más
+   * cerró, y nadie la pasa: un guion que se queda corto se recorta al 100 %.
    */
-  const deMesa = yo.abiertos !== undefined && dorsales.every(d => d.abiertos !== undefined)
+  const deTeam = meta !== undefined && meta > 0
+  const conAbiertos = yo.abiertos !== undefined && dorsales.every(d => d.abiertos !== undefined)
+  const deMesa = !deTeam && conAbiertos
   const avance = (d: Dorsal): number => {
+    if (deTeam) return Math.min(1, d.cerrados / meta)
     if (!deMesa) return d.cerrados / mx
     const total = d.cerrados + (d.abiertos ?? 0)
     return total === 0 ? 0 : d.cerrados / total
   }
   const ultimo = T - 2
   const ideal = (p: number) => Math.round((1 - p) * ultimo)
-  const mismo = (a: Dorsal, b: Dorsal) => a.cerrados === b.cerrados && (!deMesa || a.abiertos === b.abiertos)
+  // Tu dorsal se busca con sus abiertos siempre que los haya, también con la
+  // meta del Team: es lo que te distingue de otra persona con tus cierres.
+  const mismo = (a: Dorsal, b: Dorsal) => a.cerrados === b.cerrados && (!conAbiertos || a.abiertos === b.abiertos)
 
   type Corredor = { c: number; p: number; tu: boolean; x: number; lab: string; cifra: boolean }
   const resto = new Map<string, { d: Dorsal; n: number }>()
@@ -608,29 +628,42 @@ export function carreraDe(dorsales: readonly Dorsal[], yo: Dorsal, width: number
     return [desde, Math.max(i + r.lab.length, 2 + r.x + 2)]
   }
 
+  // 🔴 Al apartarse nadie puede quitarle el sitio en la pista a los que vienen
+  // después: cada uno deja hueco —dos columnas por animal— para los que le
+  // quedan detrás, y quien pierde la cifra se queda pegado al anterior, no en
+  // su sitio ideal, que ya puede estar ocupado. Con la meta del Team casi todos
+  // van cerca de la salida, y sin esto el que retrocedía para enseñar su cifra
+  // se sentaba encima de los que iban detrás, que desaparecían de la pista.
+
   // Detrás de ti, y los que empatan contigo: hacia la salida.
+  const detras = otros.filter(o => o.p <= pYo).sort((a, b) => b.p - a.p)
   let fin = tramo(tu)[1]
-  for (const r of otros.filter(o => o.p <= pYo).sort((a, b) => b.p - a.p)) {
-    r.x = Math.max(r.x, fin + 1 - 2)
-    if (r.x > ultimo || tramo(r)[0] <= fin) {
+  let suelo = tu.x + 2
+  detras.forEach((r, i) => {
+    const tope = ultimo - 2 * (detras.length - 1 - i)
+    const base = Math.max(r.x, suelo)
+    r.x = Math.max(base, fin + 1 - 2)
+    if (r.x > tope || tramo(r)[0] <= fin) {
       r.cifra = false
-      r.x = ideal(r.p)
-      continue
-    }
-    fin = tramo(r)[1]
-  }
+      r.x = Math.min(base, tope)
+    } else fin = tramo(r)[1]
+    suelo = r.x + 2
+  })
   // Delante de ti: hacia la meta.
+  const delante = otros.filter(o => o.p > pYo).sort((a, b) => a.p - b.p)
   let ini = tramo(tu)[0]
-  for (const r of otros.filter(o => o.p > pYo).sort((a, b) => a.p - b.p)) {
+  let techo = tu.x - 2
+  delante.forEach((r, i) => {
+    const piso = 2 * (delante.length - 1 - i)
+    const base = Math.min(r.x, techo)
     const largo = Math.max(r.lab.length, 2)
-    r.x = Math.min(r.x, ini - 1 - largo - 2)
-    if (r.x < 0 || tramo(r)[1] >= ini) {
+    r.x = Math.min(base, ini - 1 - largo - 2)
+    if (r.x < piso || tramo(r)[1] >= ini) {
       r.cifra = false
-      r.x = ideal(r.p)
-      continue
-    }
-    ini = tramo(r)[0]
-  }
+      r.x = Math.max(base, piso)
+    } else ini = tramo(r)[0]
+    techo = r.x - 2
+  })
 
   const pista: string[] = Array.from({ length: T }, () => '─')
   const tomadas = new Set<number>()
