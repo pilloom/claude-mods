@@ -766,6 +766,7 @@ export const register: Register = (on, options) => {
               ? { cerrados: m.pulso.tuyos }
               : { cerrados: m.pulso.tuyos, abiertos: m.pulso.pendientes },
             width,
+            m.pulso.meta,
           )
         : undefined
     // Cuatro filas: las tres de la carrera y la raya que la separa de la mesa,

@@ -250,7 +250,28 @@ cada uno su flecha y su cifra.
 Cuenta **lo mismo que el marcador**: el mismo tramo de martes a lunes, sin
 subtareas y por asignado al cerrarse.
 
-🔑 **La meta es vaciar tu mesa** (desde la 1.8.0). Cada animal avanza según lo
+🔑 **La meta es el trabajo del Team** (desde la 1.9.0), cuando el guion escribe
+`meta`: todo lo que el Team tenía que hacer en el tramo, **lo pendiente —sin
+asignar incluido— más lo cerrado**. Es la misma meta para todos, y cada animal
+avanza con sus cerrados contra ella: delante va quien más cerró, y lo que falta
+hasta la 🏁 es lo que le queda al Team. Medido contra la mesa de cada uno no era
+parejo —quien tenía 1 abierto y cerró 1 iba al 50 % y se llevaba la liebre, por
+delante de quien cerró 15 con 33 abiertos—. Lo normal es ir apiñados cerca de la
+salida: el Team rara vez despacha en una semana la mitad de lo que tiene.
+
+```
+                                              30 22 16 (Tú) 2
+                                              ▼  ▼  ▼       ▼
+🏁────────────────────────────────────────────🐇─🐢─🐢──🐢──🐢🚦
+```
+
+Ahí el que cerró 9 no lleva cifra: no cabía sin pisar la tuya, y la pierde él
+antes que su animal. **Nadie desaparece de la pista**: cada corredor deja hueco
+para los que le quedan detrás.
+
+Sin `meta` —guiones de la 1.8— la carrera mide la mesa de cada uno, como sigue:
+
+🔑 **La meta era vaciar tu mesa** (1.8.0). Cada animal avanza según lo
 que lleva despachado de su carga: **cerrados contra cerrados más abiertos**.
 Solo llega a la meta quien deja su mesa vacía. Hasta la 1.7 la meta la marcaba
 el líder, y quien corría solo llegaba siempre —16 cerrados con 75 abiertos y en
@@ -302,15 +323,25 @@ mida 20 columnas. Los emojis se cuentan a dos columnas, y ninguna fila pasa de
 
 ### Lo que el guion tiene que escribir
 
-Dos líneas más en la sección `## Pulso`: **un dorsal por persona**, la tuya
-incluida y en cualquier orden, con lo que cerró en el tramo y lo que le sigue
-abierto; y `pendientes`, lo que sigue abierto a tu nombre.
+Tres líneas más en la sección `## Pulso`:
+- **un dorsal por persona**, la tuya incluida y en cualquier orden, con lo que
+  cerró en el tramo y lo que le sigue abierto;
+- `pendientes`, lo que sigue abierto a tu nombre;
+- y `meta`, **el trabajo del Team en el tramo**: todos sus tickets abiertos
+  —asignados o no— más los que cerró en el tramo, ya sumados.
 
 ```
 tuyos: 16
 pendientes: 75
+meta: 203
 carrera: 18/2 16/75 12/20 4/36 3/3
 ```
+
+La meta cuenta con el mismo criterio que los dorsales —sin subtareas, sin
+épicas— y con el mismo filtro del Team que el resto de la mesa. Los sin asignar
+están en la meta y no en la pista: son trabajo del Team que nadie corre todavía.
+Si la meta sale más corta que los cierres de alguien, ese alguien se queda en la
+🏁; no la pasa.
 
 Los abiertos cuentan con el mismo criterio que los cerrados —asignado, sin
 subtareas, sin épicas— y **todo lo abierto**, no solo lo que está en tu mesa
@@ -321,7 +352,8 @@ Tu dorsal se encuentra por `tuyos/pendientes`, así que otra persona que cerró 
 mismo que tú no se confunde contigo. Si el guion no te puso, el panel te añade
 igual: tu dorsal ya lo dicen esas dos claves.
 
-**Los guiones de la 1.7 siguen valiendo**: `carrera: 21 18 11 7 3`, solo
+**Los guiones de la 1.8 siguen valiendo**: sin `meta`, cada uno avanza contra
+su propia mesa. **Y los de la 1.7**: `carrera: 21 18 11 7 3`, solo
 cerrados, se pinta con la meta en el líder, igual que entonces. Basta con que a
 un dorsal le falten los abiertos —o falte `pendientes`— para volver a esa regla:
 sin los abiertos de alguien no se puede medir su mesa.
