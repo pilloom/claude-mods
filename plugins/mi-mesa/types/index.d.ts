@@ -131,7 +131,16 @@ export type NotaInput = {
  * guion lo escribe, lo que le sigue abierto. Con `abiertos` la meta es **vaciar
  * tu mesa**; sin él —guiones de la 1.7— la meta la marca el líder.
  */
-export type Dorsal = { cerrados: number; abiertos?: number }
+export type Dorsal = {
+  cerrados: number
+  abiertos?: number
+  /**
+   * Quién corre (desde la 1.11.0), solo si la mesa trae la línea `nombres:` y
+   * su cuenta cuadra con `carrera`. `Tú` marca tu dorsal. La pista lo enseña
+   * en iniciales, y solo con «Carrera con nombres» encendido en `/config`.
+   */
+  nombre?: string
+}
 
 export type Pulso = {
   /** Tickets creados en el tramo. */

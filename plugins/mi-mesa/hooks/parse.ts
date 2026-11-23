@@ -428,6 +428,13 @@ const TRAMO = /^\s*tramo\s*:\s*([\w-]{1,12})\s*$/iu
 const CARRERA = /^\s*carrera\s*:\s*(\d+(?:\/\d+)?(?:[\s,]+\d+(?:\/\d+)?)*)\s*$/iu
 
 /**
+ * Los nombres de la carrera (desde la 1.11.0), en el orden de `carrera` y
+ * separados por `|`: `nombres: Tú | Miguel Ángel Canto | Allison González`.
+ * `Tú` marca tu dorsal. Si la cuenta no cuadra con `carrera`, no se lee.
+ */
+const NOMBRES = /^\s*nombres\s*:\s*(.+?)\s*$/iu
+
+/**
  * Lee el marcador de la semana de la sección `## Pulso` de la mesa.
  *
  * Devuelve nada si no está la sección o si falta una de las dos cifras que
@@ -445,6 +452,7 @@ export function parsePulso(text: string): Pulso | undefined {
   const n = new Map<string, number>()
   let tramo: string | undefined
   let carrera: Dorsal[] | undefined
+  let nombres: string[] | undefined
   for (const raw of text.split('\n')) {
     const line = raw.trimEnd()
     if (PULSO_H.test(line)) {
@@ -463,6 +471,11 @@ export function parsePulso(text: string): Pulso | undefined {
         const [cerrados = 0, abiertos] = t.split('/').map(Number)
         return abiertos === undefined ? { cerrados } : { cerrados, abiertos }
       })
+      continue
+    }
+    const ns = NOMBRES.exec(line)
+    if (ns) {
+      nombres = (ns[1] ?? '').split('|').map(s => s.trim())
       continue
     }
     const cifra = CIFRA.exec(line)
@@ -487,6 +500,10 @@ export function parsePulso(text: string): Pulso | undefined {
   const personas = si('personas', 1)
   const pendientes = si('pendientes', 0)
   const meta = si('meta', 1)
+  // Los nombres van con su dorsal o no van: si no cuadran, cualquiera de ellos
+  // podría ser de otra persona, y un nombre en el sitio de otro es peor que ninguno.
+  if (carrera && nombres?.length === carrera.length && nombres.every(Boolean))
+    carrera = carrera.map((d, i) => ({ ...d, nombre: nombres[i] ?? '' }))
   return {
     abren,
     cierran,
@@ -510,6 +527,57 @@ export type Carrera = { cifras: Tramo[]; flechas: Tramo[]; pista: string }
 /** La meta y la salida, en los extremos de la pista. */
 const META = '🏁'
 const SALIDA = '🚦'
+
+/** Las palabras de un nombre que no dan inicial: «María de la Cruz» es MC. */
+const PARTICULAS = new Set(['de', 'del', 'la', 'las', 'los', 'y', 'da', 'das', 'do', 'dos', 'van', 'von'])
+
+/** ¿Es tu dorsal? El guion lo marca con `Tú` en `nombres`. */
+export function esTuNombre(nombre: string | undefined): boolean {
+  return nombre !== undefined && /^t[uú]$/iu.test(nombre.trim())
+}
+
+/**
+ * Las iniciales con las que cada nombre corre en la pista (desde la 1.11.0):
+ * la de sus **dos primeras palabras**, sin acentos —«Miguel Ángel Canto Poot»
+ * es `MA`—, y con un nombre de una palabra, sus dos primeras letras.
+ *
+ * Solo si dos coinciden se alargan, y solo esas: con la inicial de la palabra
+ * siguiente —`AML`, `AMG`— y, si ni así, con un número —`AM`, `AM2`—. Un
+ * nombre sin letras se queda en `''` y corre solo con su cifra.
+ */
+export function inicialesDe(nombres: readonly string[]): string[] {
+  const palabras = nombres.map(n =>
+    n
+      .normalize('NFD')
+      .replace(/\p{M}/gu, '')
+      .split(/\s+/u)
+      .map(w => w.replace(/[^\p{L}\p{N}]/gu, ''))
+      .filter(w => w.length > 0 && !PARTICULAS.has(w.toLowerCase())),
+  )
+  const con = (p: readonly string[], k: number): string =>
+    (p.length === 1 ? (p[0] ?? '').slice(0, k) : p.slice(0, k).map(w => w[0] ?? '').join('')).toUpperCase()
+  const out = palabras.map(p => con(p, 2))
+  const repetidas = () => {
+    const n = new Map<string, number>()
+    for (const s of out) if (s) n.set(s, (n.get(s) ?? 0) + 1)
+    return out.map(s => s !== '' && (n.get(s) ?? 0) > 1)
+  }
+  const largo = Math.max(2, ...palabras.map(p => p.length))
+  for (let k = 3; k <= largo; k++) {
+    const rep = repetidas()
+    if (!rep.some(Boolean)) break
+    palabras.forEach((p, i) => {
+      if (rep[i]) out[i] = con(p, k)
+    })
+  }
+  const vistas = new Map<string, number>()
+  return out.map(s => {
+    if (!s) return s
+    const n = (vistas.get(s) ?? 0) + 1
+    vistas.set(s, n)
+    return n === 1 ? s : `${s}${n}`
+  })
+}
 
 /** Lo menos que tiene que medir la pista para que la carrera diga algo. */
 const PISTA_MIN = 20
@@ -540,6 +608,11 @@ const PISTA_MIN = 20
  * - Si al apartarse alguien no cabe, pierde su cifra y su flecha antes que
  *   pisar la tuya; su animal se queda en su sitio si está libre.
  *
+ * - **Con nombres** (desde la 1.11.0, `conNombres`, que es «Carrera con
+ *   nombres» en `/config`): si los dorsales los traen, cada cifra va con las
+ *   iniciales de quien corre —`MA 6`— y un empate con las de todos —`AA·WS 0`—.
+ *   Apagado, o sin nombres en la mesa, la pista es la de siempre.
+ *
  * No pasa de `width - 1` columnas, contando los emojis a dos.
  */
 export function carreraDe(
@@ -547,6 +620,7 @@ export function carreraDe(
   yo: Dorsal,
   width: number,
   meta?: number,
+  conNombres = false,
 ): Carrera | undefined {
   const W = width - 1
   const T = W - anchoEnTerminal(META) - anchoEnTerminal(SALIDA)
@@ -583,13 +657,23 @@ export function carreraDe(
   // meta del Team: es lo que te distingue de otra persona con tus cierres.
   const mismo = (a: Dorsal, b: Dorsal) => a.cerrados === b.cerrados && (!conAbiertos || a.abiertos === b.abiertos)
 
-  type Corredor = { c: number; p: number; tu: boolean; x: number; lab: string; cifra: boolean }
-  const resto = new Map<string, { d: Dorsal; n: number }>()
+  /** `corto`: la etiqueta sin iniciales, para cuando con ellas no cabe. */
+  type Corredor = { c: number; p: number; tu: boolean; x: number; lab: string; corto: string; cifra: boolean }
+  const resto = new Map<string, { d: Dorsal; n: number; quienes: string[] }>()
+  // Con `Tú` en los nombres tu dorsal se sabe seguro; sin él, se busca por cifras.
+  const marcado = dorsales.findIndex(d => esTuNombre(d.nombre))
+  const nombrados = conNombres && dorsales.every(d => d.nombre !== undefined)
+  const ajenos = dorsales.filter((_, i) => i !== marcado).map(d => d.nombre ?? '')
+  const iniciales = new Map<Dorsal, string>()
+  if (nombrados) {
+    const inis = inicialesDe(ajenos)
+    dorsales.filter((_, i) => i !== marcado).forEach((d, i) => iniciales.set(d, inis[i] ?? ''))
+  }
   let quitado = false
-  for (const d of dorsales) {
+  for (const [i, d] of dorsales.entries()) {
     // Uno de los dorsales iguales al tuyo eres tú; si el guion no te puso, se
     // te añade igual: tu dorsal ya lo dicen `tuyos` y `pendientes`.
-    if (!quitado && mismo(d, yo)) {
+    if (marcado >= 0 ? i === marcado : !quitado && mismo(d, yo)) {
       quitado = true
       continue
     }
@@ -599,16 +683,26 @@ export function carreraDe(
     // pista. Juntos son una tortuga con `0×2`, como cualquier otro empate.
     const k = deMesa ? `${d.cerrados}@${avance(d)}` : String(d.cerrados)
     const prev = resto.get(k)
-    resto.set(k, { d, n: (prev?.n ?? 0) + 1 })
+    const quien = iniciales.get(d)
+    resto.set(k, { d, n: (prev?.n ?? 0) + 1, quienes: [...(prev?.quienes ?? []), ...(quien ? [quien] : [])] })
   }
   const pYo = avance(yo)
-  const tu: Corredor = { c: yo.cerrados, p: pYo, tu: true, x: ideal(pYo), lab: `${yo.cerrados} (Tú)`, cifra: true }
-  const otros: Corredor[] = [...resto.values()].map(({ d, n }) => ({
+  const tuLab = `${yo.cerrados} (Tú)`
+  const tu: Corredor = { c: yo.cerrados, p: pYo, tu: true, x: ideal(pYo), lab: tuLab, corto: tuLab, cifra: true }
+  const otros: Corredor[] = [...resto.values()].map(({ d, n, quienes }) => ({
+    corto: n > 1 ? `${d.cerrados}×${n}` : String(d.cerrados),
     c: d.cerrados,
     p: avance(d),
     tu: false,
     x: ideal(avance(d)),
-    lab: n > 1 ? `${d.cerrados}×${n}` : String(d.cerrados),
+    // Con nombres, quién corre en vez de cuántos: `MA 6`, `AA·WS 0`. Si a
+    // alguno del empate le faltan las iniciales, vuelve el `×n`.
+    lab:
+      nombrados && quienes.length === n
+        ? `${quienes.join('·')} ${d.cerrados}`
+        : n > 1
+          ? `${d.cerrados}×${n}`
+          : String(d.cerrados),
     cifra: true,
   }))
   const pMax = Math.max(pYo, ...otros.map(o => o.p))
@@ -642,11 +736,16 @@ export function carreraDe(
   detras.forEach((r, i) => {
     const tope = ultimo - 2 * (detras.length - 1 - i)
     const base = Math.max(r.x, suelo)
-    r.x = Math.max(base, fin + 1 - 2)
-    if (r.x > tope || tramo(r)[0] <= fin) {
+    const cabe = () => {
+      r.x = Math.max(base, fin + 1 - 2)
+      return r.x <= tope && tramo(r)[0] > fin
+    }
+    // Con iniciales que no caben, la cifra sola antes que nada: `0×2`.
+    if (cabe() || (r.lab !== r.corto && ((r.lab = r.corto), cabe()))) fin = tramo(r)[1]
+    else {
       r.cifra = false
       r.x = Math.min(base, tope)
-    } else fin = tramo(r)[1]
+    }
     suelo = r.x + 2
   })
   // Delante de ti: hacia la meta.
@@ -656,12 +755,15 @@ export function carreraDe(
   delante.forEach((r, i) => {
     const piso = 2 * (delante.length - 1 - i)
     const base = Math.min(r.x, techo)
-    const largo = Math.max(r.lab.length, 2)
-    r.x = Math.min(base, ini - 1 - largo - 2)
-    if (r.x < piso || tramo(r)[1] >= ini) {
+    const cabe = () => {
+      r.x = Math.min(base, ini - 1 - Math.max(r.lab.length, 2) - 2)
+      return r.x >= piso && tramo(r)[1] < ini
+    }
+    if (cabe() || (r.lab !== r.corto && ((r.lab = r.corto), cabe()))) ini = tramo(r)[0]
+    else {
       r.cifra = false
       r.x = Math.max(base, piso)
-    } else ini = tramo(r)[0]
+    }
     techo = r.x - 2
   })
 

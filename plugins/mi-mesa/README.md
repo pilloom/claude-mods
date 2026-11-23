@@ -301,6 +301,28 @@ líder y cuántos llevas detrás sin que la pista diga quién es nadie. Y no es 
 el panel los esconda: **el guion ni los escribe**, así que no están en el
 fichero.
 
+🔑 **Con nombres, para quien supervisa** (desde la 1.11.0). Quien administra el
+Team necesita saber quién va dónde: a quién apoyar y quién está saturado de
+abiertos. Para eso está **«Carrera con nombres»** en `/config` → mi-mesa,
+**apagado por defecto**. Encendido, cada cifra lleva las **iniciales de las dos
+primeras palabras** del nombre, sin acentos, y un empate lleva las de todos:
+
+```
+                               MA 6 AM 5      3 (Tú)      AG·AA 0
+                               ▼    ▼         ▼              ▼
+🏁─────────────────────────────🐇───🐢────────🐢─────────────🐢🚦
+```
+
+Las iniciales solo se alargan si coinciden, y solo las que coinciden: con la
+inicial de la palabra siguiente —`AML` y `AMG`— y, si ni así, con un número
+—`AR` y `AR2`—. Las partículas («de», «del», «la»…) no dan inicial. Si con
+iniciales una etiqueta no cabe, vuelve a la cifra sola —`0×2`— antes que
+quedarse sin ella.
+
+Hacen falta las dos cosas: que la mesa traiga los nombres y que el ajuste esté
+encendido. Apagado, la pista es la de siempre aunque la mesa los traiga, y el
+generador del mod solo los escribe con el ajuste encendido.
+
 🔑 **La pista va al revés —meta a la izquierda, salida a la derecha— por los
 emojis.** 🐇 y 🐢 miran a la izquierda en la fuente de emojis de macOS, y un
 terminal no puede voltear un glifo: así corren hacia donde miran. 🏁 marca la
@@ -365,6 +387,20 @@ sin los abiertos de alguien no se puede medir su mesa.
 
 Sin `carrera` o sin `tuyos` no hay carrera, y la mesa se pinta como antes, sin
 hueco. Una línea con algo que no sea un número —un nombre— no se lee.
+
+**Los nombres, opcionales** (desde la 1.11.0): una línea `nombres` con uno por
+dorsal, **en el mismo orden que `carrera`** y separados por `|`. `Tú` marca
+el tuyo, y es mejor que buscarte por cifras: otra persona con tu mismo dorsal
+no se confunde contigo.
+
+```
+carrera: 6/0 5/8 3/4 0/1 0/2
+nombres: Miguel Ángel Canto Poot | Alejandro Magaña López | Tú | Allison González | Alejandro Aguirre Hau
+```
+
+Se escribe el nombre completo y el panel saca las iniciales. Si la cuenta no
+cuadra con `carrera`, o falta alguno, **no se lee ninguno**: un nombre en el
+sitio de otro es peor que ninguno. Sin la línea, la carrera es la de siempre.
 
 ## Regenerar la mesa
 

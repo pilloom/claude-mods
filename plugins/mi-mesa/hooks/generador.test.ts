@@ -119,3 +119,32 @@ test('el cliente pagina con nextPageToken y autentica en base64 UTF-8', async ()
   expect(vistas.map(v => v.token)).toEqual([undefined, 'p2'])
   expect(vistas[0]?.auth).toBe(`Basic ${base64('yo@x.test:t')}`)
 })
+
+
+test('con «Carrera con nombres» el generador escribe los nombres, y apagado no', async () => {
+  const de = (key: string, id: string, nombre: string): Issue => {
+    const x = i(key)
+    x.fields.assignee = { accountId: id, displayName: nombre }
+    return x
+  }
+  const cliente: Cliente = {
+    yo: async () => ({ accountId: 'yo', displayName: 'Yo' }),
+    campoTeam: async () => undefined,
+    buscar: async jql =>
+      jql.includes('currentUser()')
+        ? [i('ABC-1')]
+        : jql.includes('resolutiondate')
+          ? [i('ABC-3'), de('ABC-4', 'm', 'Miguel Ángel Canto Poot'), de('ABC-5', 'm', 'Miguel Ángel Canto Poot')]
+          : jql.includes('created')
+            ? []
+            : [i('ABC-1'), de('ABC-6', 'w', 'Wilberth | Sansores')],
+  }
+  const hoy = new Date(2026, 10, 15, 12)
+  const apagado = await generar(cliente, CFG, hoy)
+  expect(apagado).not.toContain('nombres:')
+  expect(apagado).not.toContain('Miguel')
+  const md = await generar(cliente, { ...CFG, nombres: true }, hoy)
+  expect(md).toContain('carrera: 2/0 1/1 0/1')
+  expect(md).toContain('nombres: Miguel Ángel Canto Poot | Tú | Wilberth Sansores')
+  expect(parseMesa(md, 1).pulso?.carrera?.map(d => d.nombre)).toEqual(['Miguel Ángel Canto Poot', 'Tú', 'Wilberth Sansores'])
+})

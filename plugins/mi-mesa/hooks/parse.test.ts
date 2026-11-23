@@ -5,6 +5,7 @@ import {
   anchoEnTerminal,
   carreraDe,
   comandoDe,
+  inicialesDe,
   envolver,
   lineaDeTicket,
   parseHistory,
@@ -668,4 +669,93 @@ test('carreraDe: si vas primero la liebre es tuya; sin cierres o sin ancho no ha
   expect(plana([21, 15, 11], 21)[0]?.startsWith('  21 (Tú)')).toBe(true)
   expect(plana([0, 0], 0)).toEqual([])
   expect(plana([5, 3], 3, 20)).toEqual([])
+})
+
+
+test('parsePulso lee los nombres de la carrera si cuadran con los dorsales', () => {
+  const base = '## Pulso\nabren: 4\ncierran: 9\ntuyos: 5\ncarrera: 6/0 5/8 0/1\n'
+  expect(parsePulso(base + 'nombres: Miguel Ángel Canto | Tú | Allison González\n')?.carrera).toEqual([
+    { cerrados: 6, abiertos: 0, nombre: 'Miguel Ángel Canto' },
+    { cerrados: 5, abiertos: 8, nombre: 'Tú' },
+    { cerrados: 0, abiertos: 1, nombre: 'Allison González' },
+  ])
+  // Si no cuadran, ninguno: un nombre en el sitio de otro es peor que ninguno.
+  expect(parsePulso(base + 'nombres: Miguel | Tú\n')?.carrera?.some(d => 'nombre' in d)).toBe(false)
+  expect(parsePulso(base + 'nombres: Miguel |  | Allison\n')?.carrera?.some(d => 'nombre' in d)).toBe(false)
+})
+
+test('inicialesDe: las de las dos primeras palabras, y solo los repetidos se alargan', () => {
+  expect(inicialesDe(['Miguel Ángel Canto Poot', 'Allison González', 'Wilberth Sansores Castillo'])).toEqual(['MA', 'AG', 'WS'])
+  expect(inicialesDe(['Alejandro Magaña López', 'Alejandro Magaña Gómez', 'Ana'])).toEqual(['AML', 'AMG', 'AN'])
+  expect(inicialesDe(['María de la Cruz', 'Íñigo Ñúñez'])).toEqual(['MC', 'IN'])
+  expect(inicialesDe(['Ana Ruiz', 'Ana Ruiz', ''])).toEqual(['AR', 'AR2', ''])
+})
+
+/** La fila de cifras de una carrera con nombres. */
+function cifrasConNombres(ds: { cerrados: number; abiertos?: number; nombre?: string }[], yo: { cerrados: number; abiertos?: number }, on = true, meta?: number): string {
+  const c = carreraDe(ds, yo, 80, meta, on)
+  return c ? c.cifras.map(x => x.text).join('') : ''
+}
+
+test('carreraDe con nombres: iniciales y cifra; apagado, como siempre', () => {
+  const ds = [
+    { cerrados: 6, abiertos: 0, nombre: 'Miguel Ángel Canto Poot' },
+    { cerrados: 5, abiertos: 8, nombre: 'Alejandro Magaña López' },
+    { cerrados: 3, abiertos: 2, nombre: 'Tú' },
+    { cerrados: 0, abiertos: 1, nombre: 'Allison González' },
+  ]
+  const yo = { cerrados: 3, abiertos: 2 }
+  const on = cifrasConNombres(ds, yo, true, 40)
+  expect(on).toContain('MA 6')
+  expect(on).toContain('AM 5')
+  expect(on).toContain('(Tú)')
+  expect(on).not.toContain('Tú 3 Tú')
+  const off = cifrasConNombres(ds, yo, false, 40)
+  expect(off).not.toMatch(/MA|AM|AG/u)
+  expect(off).toContain('(Tú)')
+})
+
+test('carreraDe con nombres: con Tú marcado, quien cerró lo mismo que tú no eres tú', () => {
+  // Mismo dorsal que el tuyo, pero el guion dice cuál eres: el otro conserva su nombre.
+  const ds = [
+    { cerrados: 4, abiertos: 1, nombre: 'Wilberth Sansores' },
+    { cerrados: 4, abiertos: 1, nombre: 'Tú' },
+    { cerrados: 9, abiertos: 0, nombre: 'Miguel Canto' },
+  ]
+  const on = cifrasConNombres(ds, { cerrados: 4, abiertos: 1 }, true, 30)
+  expect(on).toContain('WS 4')
+  expect(on).toContain('MC 9')
+})
+
+test('carreraDe con nombres: un empate lleva las iniciales de todos', () => {
+  const ds = [
+    { cerrados: 8, abiertos: 0, nombre: 'Tú' },
+    { cerrados: 0, abiertos: 2, nombre: 'Alejandro Aguirre' },
+    { cerrados: 0, abiertos: 3, nombre: 'Wilberth Sansores' },
+  ]
+  expect(cifrasConNombres(ds, { cerrados: 8, abiertos: 0 }, true, 30)).toContain('AA·WS 0')
+})
+
+test('carreraDe con nombres encendido pero sin nombres en la mesa: como siempre', () => {
+  expect(cifrasConNombres([{ cerrados: 6 }, { cerrados: 3 }], { cerrados: 3 }, true)).toEqual(
+    cifrasConNombres([{ cerrados: 6 }, { cerrados: 3 }], { cerrados: 3 }, false),
+  )
+})
+
+test('carreraDe con nombres: si las iniciales no caben, queda la cifra; nadie pasa del ancho', () => {
+  const ds = [
+    { cerrados: 6, abiertos: 0, nombre: 'Miguel Ángel Canto Poot' },
+    { cerrados: 5, abiertos: 8, nombre: 'Alejandro Magaña López' },
+    { cerrados: 3, abiertos: 4, nombre: 'Tú' },
+    { cerrados: 0, abiertos: 1, nombre: 'Allison González' },
+    { cerrados: 0, abiertos: 2, nombre: 'Alejandro Aguirre Hau' },
+  ]
+  const c = carreraDe(ds, { cerrados: 3, abiertos: 4 }, 70, 24, true)
+  const t = (f: { text: string }[] = []) => f.map(x => x.text).join('')
+  expect(t(c?.cifras)).toContain('MA 6')
+  expect(t(c?.cifras)).toContain('0×2')
+  for (const w of [30, 45, 70, 100]) {
+    const k = carreraDe(ds, { cerrados: 3, abiertos: 4 }, w, 24, true)
+    if (k) expect(t(k.cifras).length).toBeLessThanOrEqual(w - 1)
+  }
 })

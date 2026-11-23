@@ -150,8 +150,16 @@ function jiraDe(options: Readonly<Record<string, unknown>>): ConfigJira | undefi
       .split(',')
       .map(e => e.trim().toLowerCase())
       .filter(Boolean),
+    nombres: options.carreraConNombres === true,
   }
 }
+
+/**
+ * «Carrera con nombres» de `/config` (desde la 1.11.0), apagado si no se tocó.
+ * Hacen falta las dos cosas: que la mesa traiga la línea `nombres` y que esto
+ * esté encendido. Apagado, la pista es la de siempre aunque la mesa los traiga.
+ */
+let conNombres = false
 
 // La mesa es la del repo en el que corre la sesión: backend, front o el que
 // tenga su docs/MI-MESA.md. El título del panel lleva el nombre de esa carpeta.
@@ -559,6 +567,7 @@ export const register: Register = (on, options) => {
   // del fichero y la convención. Se guarda crudo; `comandoDe` decide si vale.
   configurado = typeof options.generador === 'string' ? options.generador.trim() : undefined
   jira = jiraDe(options)
+  conNombres = options.carreraConNombres === true
 
   on('session.start', async ($, e, next) => {
     await $.command.register({
@@ -854,6 +863,7 @@ export const register: Register = (on, options) => {
               : { cerrados: m.pulso.tuyos, abiertos: m.pulso.pendientes },
             width,
             m.pulso.meta,
+            conNombres,
           )
         : undefined
     // Cuatro filas: las tres de la carrera y la raya que la separa de la mesa,
