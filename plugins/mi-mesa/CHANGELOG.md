@@ -1,5 +1,24 @@
 # Changelog
 
+## [1.11.0] — 2026-11-23
+
+### La carrera con nombres, para quien supervisa
+
+- Quien administra o supervisa al Team necesita saber quién va dónde: a quién
+  apoyar, quién está saturado de abiertos y cómo se reparten los cierres. Ahora
+  hay **«Carrera con nombres»** en `/config` → mi-mesa, **apagado por
+  defecto**. Apagado, la carrera es la de siempre: sin nombres, salvo el tuyo.
+- Encendido, cada cifra lleva las **iniciales de las dos primeras palabras**
+  del nombre —`MA 6`, `AM 5`—, y un empate lleva las de todos —`AA·WS 0`—.
+  Solo si coinciden se alargan: `AML` y `AMG` y, si ni así, `AR` y `AR2`. Si
+  con iniciales una etiqueta no cabe, vuelve a la cifra sola.
+- Los nombres llegan en una línea nueva y opcional del pulso, `nombres:`, uno
+  por dorsal y en el orden de `carrera`, separados por `|`; `Tú` marca el
+  tuyo. Si la cuenta no cuadra, no se lee ninguno.
+- El generador del mod escribe la línea **solo con el ajuste encendido**, con
+  el `displayName` de Jira. Propuesta de Wilberth Sansores, del Team
+  Plataformas.
+
 ## [1.10.0] — 2026-11-15
 
 ### El mod trae su propio generador de la mesa

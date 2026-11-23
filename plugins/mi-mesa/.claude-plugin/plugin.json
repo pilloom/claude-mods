@@ -1,7 +1,7 @@
 {
   "name": "mi-mesa",
-  "version": "1.10.0",
-  "description": "Panel con tu mesa de trabajo (docs/MI-MESA.md) agrupada por hilo, el marcador de la semana —lo que se abre contra lo que se cierra—, la carrera del Team al pie, sin nombres, y un botón para regenerarla —con el guion del repo o con el generador del propio mod contra tu Jira—, el post-it de NOTAS.md —que se escribe pidiéndolo o con /nota— y los últimos mensajes que le pasaste a Claude Code, más un sonido al acabar el turno",
+  "version": "1.11.0",
+  "description": "Panel con tu mesa de trabajo (docs/MI-MESA.md) agrupada por hilo, el marcador de la semana —lo que se abre contra lo que se cierra—, la carrera del Team al pie —sin nombres salvo que lo enciendas—, y un botón para regenerarla —con el guion del repo o con el generador del propio mod contra tu Jira—, el post-it de NOTAS.md —que se escribe pidiéndolo o con /nota— y los últimos mensajes que le pasaste a Claude Code, más un sonido al acabar el turno",
   "types": "./types/index.d.ts",
   "author": {
     "name": "RBSistemas"
@@ -56,6 +56,12 @@
       "default": "",
       "description": "Generador del mod, opcional: etiquetas separadas por comas que no forman hilo (áreas, componentes). Las que empiezan por bloqueado o blocked ya no lo forman",
       "title": "Jira: etiquetas que no son hilo"
+    },
+    "carreraConNombres": {
+      "type": "boolean",
+      "default": false,
+      "description": "Pinta en la carrera las iniciales de cada persona (MA 6), para quien supervisa al Team. Apagado: sin nombres, salvo el tuyo. El generador del mod solo escribe los nombres en la mesa con esto encendido",
+      "title": "Carrera con nombres"
     }
   }
 }

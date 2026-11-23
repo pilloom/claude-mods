@@ -29,6 +29,11 @@ export type ConfigJira = {
   team: string
   /** Etiquetas que no forman hilo, en minúsculas. */
   noHilos: readonly string[]
+  /**
+   * «Carrera con nombres» (desde la 1.11.0): escribe la línea `nombres` del
+   * pulso. Apagado, la mesa sale sin nombres, como siempre.
+   */
+  nombres?: boolean
 }
 
 /** Lo que llega de Jira de un issue, solo lo que se lee. */
@@ -205,8 +210,21 @@ export type PulsoArmado = {
   puesto: number
   personas: number
   pendientes: number
-  carrera: { cerrados: number; abiertos: number }[]
+  /** `nombre` es el `displayName` de Jira, y `Tú` el tuyo. */
+  carrera: { cerrados: number; abiertos: number; nombre: string }[]
   meta: number
+}
+
+/** El `displayName` de cada `accountId`; `|` y saltos fuera, que son el separador. */
+function nombresDe(...listas: readonly (readonly Issue[])[]): Map<string, string> {
+  const n = new Map<string, string>()
+  for (const xs of listas)
+    for (const i of xs) {
+      const a = i.fields.assignee
+      if (a?.accountId && a.displayName && !n.has(a.accountId))
+        n.set(a.accountId, a.displayName.replace(/[|\s]+/gu, ' ').trim())
+    }
+  return n
 }
 
 /** Cuántos tickets lleva cada persona, por `accountId`, sin subtareas. */
@@ -258,10 +276,15 @@ export function armarPulso(d: {
   const mejores = [...cerradosPor.values()].filter(n => n > tuyos).length
   const personas = tuyos > 0 ? cerradosPor.size : cerradosPor.size + 1
   const ids = new Set([...cerradosPor.keys(), ...abiertosPor.keys()])
-  const carrera = [...ids].map(id => ({ cerrados: cerradosPor.get(id) ?? 0, abiertos: abiertosPor.get(id) ?? 0 }))
+  const nombres = nombresDe(d.cerrados, d.abiertos)
+  const carrera = [...ids].map(id => ({
+    cerrados: cerradosPor.get(id) ?? 0,
+    abiertos: abiertosPor.get(id) ?? 0,
+    nombre: id === d.yo ? 'Tú' : (nombres.get(id) ?? '?'),
+  }))
   // Sin nada tuyo no estás en ninguna tabla, y sin dorsal no hay animal tuyo.
-  if (tuyos === 0 && pendientes === 0) carrera.push({ cerrados: 0, abiertos: 0 })
-  carrera.sort((a, b) => b.cerrados - a.cerrados || a.abiertos - b.abiertos)
+  if (tuyos === 0 && pendientes === 0) carrera.push({ cerrados: 0, abiertos: 0, nombre: 'Tú' })
+  carrera.sort((a, b) => b.cerrados - a.cerrados || a.abiertos - b.abiertos || a.nombre.localeCompare(b.nombre))
   return {
     tramo: d.tramo,
     abren,
@@ -279,12 +302,15 @@ export function armarPulso(d: {
 }
 
 /** La sección `## Pulso` tal como la lee `parsePulso`. */
-export function seccionDelPulso(p: PulsoArmado): string[] {
+export function seccionDelPulso(p: PulsoArmado, conNombres = false): string[] {
   return [
     '## Pulso de la semana',
     '',
     'Lo que **entra** contra lo que **sale**, de **martes a lunes**, del Team entero y ' +
-      '**sin nombres**. Las subtareas no entran en `abren` ni en `cierran`. `meta` es lo ' +
+      (conNombres
+        ? 'con los **nombres** de la carrera en `nombres`, en su mismo orden (`Tú` eres tú). '
+        : '**sin nombres**. ') +
+      'Las subtareas no entran en `abren` ni en `cierran`. `meta` es lo ' +
       'abierto del Team, asignado o no, más lo cerrado en el tramo: la meta común de la carrera.',
     '',
     '```',
@@ -297,6 +323,7 @@ export function seccionDelPulso(p: PulsoArmado): string[] {
     `personas: ${p.personas}`,
     `pendientes: ${p.pendientes}`,
     `carrera: ${p.carrera.map(x => `${x.cerrados}/${x.abiertos}`).join(' ')}`,
+    ...(conNombres ? [`nombres: ${p.carrera.map(x => x.nombre || '?').join(' | ')}`] : []),
     `meta: ${p.meta}`,
     '```',
     '',
@@ -396,7 +423,7 @@ export async function generar(cliente: Cliente, cfg: ConfigJira, hoy: Date): Pro
     for (const i of g.issues) out.push(lineaDe(i, g.hilo, yo.accountId, cfg.noHilos))
     out.push('```', '')
   }
-  if (pulso) out.push(...seccionDelPulso(pulso))
+  if (pulso) out.push(...seccionDelPulso(pulso, cfg.nombres === true))
   out.push(
     '## Lo que NO está aquí',
     '',
