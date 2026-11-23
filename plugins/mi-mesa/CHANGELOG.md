@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.11.1] — 2026-11-23
+
+### Un ejemplo de cómo escribir `nombres`
+
+- El README trae, en «Lo que el guion tiene que escribir», el código con el
+  que el guion del backend de Lanzadera escribe `carrera` y `nombres` a la
+  vez, con `Tú` en tu dorsal, para que cada repo adapte el suyo. Solo
+  documentación: el panel no cambia.
+
 ## [1.11.0] — 2026-11-23
 
 ### La carrera con nombres, para quien supervisa
