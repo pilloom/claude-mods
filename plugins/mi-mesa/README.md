@@ -402,6 +402,33 @@ Se escribe el nombre completo y el panel saca las iniciales. Si la cuenta no
 cuadra con `carrera`, o falta alguno, **no se lee ninguno**: un nombre en el
 sitio de otro es peor que ninguno. Sin la línea, la carrera es la de siempre.
 
+Un ejemplo en JavaScript, el del guion del backend de Lanzadera
+(`scripts/lib/pulso-de-la-semana.js`). Cada dorsal lleva su nombre hasta el
+final, y solo al escribir se separan las dos líneas, así que el orden no se
+puede descuadrar:
+
+```js
+// `porPersona` y `abiertosPorPersona`: Map<displayName, número>, sin subtareas.
+// `yo`: tu displayName de /rest/api/3/myself, ya con trim().
+const dorsales = [...new Set([...porPersona.keys(), ...abiertosPorPersona.keys()])]
+  .map((n) => ({
+    cerrados: porPersona.get(n) ?? 0,
+    abiertos: abiertosPorPersona.get(n) ?? 0,
+    nombre: n === yo ? 'Tú' : n.replace(/[|\s]+/g, ' '),
+  }));
+if (tuyos === 0 && pendientes === 0) dorsales.push({ cerrados: 0, abiertos: 0, nombre: 'Tú' });
+dorsales.sort((a, b) => b.cerrados - a.cerrados || a.abiertos - b.abiertos || a.nombre.localeCompare(b.nombre));
+
+lineas.push(`carrera: ${dorsales.map((d) => `${d.cerrados}/${d.abiertos}`).join(' ')}`);
+// Sin saber cuál eres, ningún nombre: el tuyo correría como el de otra persona.
+if (dorsales.filter((d) => d.nombre === 'Tú').length === 1)
+  lineas.push(`nombres: ${dorsales.map((d) => d.nombre).join(' | ')}`);
+```
+
+Los nombres se escriben **siempre**: si se ven o no lo decide el interruptor de
+cada uno en `/config`. Y se quitan los `|` de cada nombre, que son el
+separador.
+
 ## Regenerar la mesa
 
 El fichero lo escribe el guion de cada repositorio, y el panel pinta una **`↻`**
