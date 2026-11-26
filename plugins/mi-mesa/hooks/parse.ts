@@ -182,14 +182,21 @@ export function parseMesa(text: string, mtimeMs: number): Omit<Mesa, 'repo'> {
   // hilos: no lleva líneas de ticket, así que entra y sale como un hilo vacío
   // y el filtro de abajo la quita de la cuenta.
   const pulso = parsePulso(text)
+  // El motivo de que no haya pulso, que el generador del mod deja al pie: en
+  // el fichero no lo leía nadie, y el panel solo enseñaba que faltaba.
+  const sinPulso = pulso === undefined ? SIN_PULSO.exec(text)?.[1]?.trim() : undefined
   return {
     generated,
     hilos: hilos.filter(h => h.tickets.length > 0),
     mtimeMs,
     ...(generador === undefined ? {} : { generador }),
     ...(pulso === undefined ? {} : { pulso }),
+    ...(sinPulso ? { sinPulso } : {}),
   }
 }
+
+/** La línea con la que el generador del mod dice por qué no hay pulso. */
+const SIN_PULSO = /^- ⚠️ Sin pulso de la semana: (.+?)\.?$/mu
 
 /**
  * Los mensajes que escribiste en este repo, del más nuevo al más viejo.

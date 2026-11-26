@@ -39,6 +39,12 @@ export type Mesa = {
    * Team no le cambia la naturaleza al fichero ni obliga a generar dos.
    */
   pulso?: Pulso
+  /**
+   * Por qué la mesa no trae pulso, cuando lo dice (desde la 1.12.1): el
+   * generador del mod lo escribe al pie, en «Lo que NO está aquí», como
+   * `⚠️ Sin pulso de la semana: …`. Solo si no hay `pulso`.
+   */
+  sinPulso?: string
 }
 
 /**

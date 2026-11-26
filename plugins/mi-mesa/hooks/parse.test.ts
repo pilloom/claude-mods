@@ -759,3 +759,11 @@ test('carreraDe con nombres: si las iniciales no caben, queda la cifra; nadie pa
     if (k) expect(t(k.cifras).length).toBeLessThanOrEqual(w - 1)
   }
 })
+
+test('parseMesa lee por qué no hay pulso, y solo cuando no lo hay', () => {
+  const pie = '## Lo que NO está aquí\n\n- ⚠️ Sin pulso de la semana: a algún ticket no le llegó el tipo.\n'
+  expect(parseMesa(`# Mi mesa\n\n${pie}`, 1).sinPulso).toBe('a algún ticket no le llegó el tipo')
+  expect(parseMesa('# Mi mesa\n', 1).sinPulso).toBeUndefined()
+  const conPulso = '## Pulso de la semana\n\n```\nabren: 3\ncierran: 2\n```\n\n' + pie
+  expect(parseMesa(conPulso, 1).sinPulso).toBeUndefined()
+})

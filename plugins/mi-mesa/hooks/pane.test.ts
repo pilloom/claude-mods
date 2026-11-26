@@ -828,6 +828,27 @@ test('sin pulso y sin Jira en /config, el panel dice cómo tenerlo', async ($, o
   await ui.unmount()
 })
 
+test('si la mesa dice por qué no trae pulso, el panel enseña el motivo', { options: CON_JIRA }, async ($, on) => {
+  ficheros(on, ROOT, `${MD}\n## Lo que NO está aquí\n\n- ⚠️ Sin pulso de la semana: Jira contestó 500.\n`)
+  sinGit(on)
+  abre(on)
+  await $.command.run({ command: 'mi-mesa', args: '' } as never)
+  const ui = await $.ui.mount({ plugin: 'mi-mesa', surface: 'terminal', component: 'Pane', requestId: 'mi-mesa', props: {} as never })
+  expect(await ui.find({ type: 'Text', text: /^Sin pulso: Jira contestó 500$/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /pon tu Jira/ })).toBeUndefined()
+  await ui.unmount()
+})
+
+test('con Jira en /config y una mesa de antes, sin pulso ni motivo, el panel pide la ↻', { options: CON_JIRA }, async ($, on) => {
+  ficheros(on, ROOT, MD)
+  sinGit(on)
+  abre(on)
+  await $.command.run({ command: 'mi-mesa', args: '' } as never)
+  const ui = await $.ui.mount({ plugin: 'mi-mesa', surface: 'terminal', component: 'Pane', requestId: 'mi-mesa', props: {} as never })
+  expect(await ui.find({ type: 'Text', text: /Sin pulso: pulsa la ↻/ })).toBeDefined()
+  await ui.unmount()
+})
+
 test('decir que no deja la mesa como estaba y no corre nada', async ($, on) => {
   const disco = ficheros(on, ROOT, MD)
   disco.set(GUION, '// el guion de este repo')
@@ -1076,8 +1097,9 @@ test('sin la sección del pulso el panel no deja la fila en blanco', async ($, o
  * `pon`, que es como lo reescribe el guion de verdad: los hooks del disco en
  * memoria se registran una vez por test, antes de la primera llamada a `$`.
  */
-// Con el Jira del generador puesto, para que la mesa sin pulso no lleve la
-// pista: la pista también cuesta una fila, y aquí se mide solo el marcador.
+// Desde la 1.12.1 la mesa sin pulso lleva siempre una línea que lo dice —la
+// pista, o el motivo—, así que no hay estado sin una de las dos: se mide que
+// cada una cuesta su fila y que el marcador ocupa la de la pista.
 test('el marcador le cuesta a la mesa una fila, y la cuenta lo dice', { options: CON_JIRA }, async ($, on) => {
   const lineas = ['> 🤖 **Generado** por `scripts/qa/listar-mi-mesa.js` el 2026-10-07, para **X**.', '']
   for (let i = 0; i < 6; i++) {
@@ -1103,7 +1125,8 @@ test('el marcador le cuesta a la mesa una fila, y la cuenta lo dice', { options:
     await ui.unmount()
     return /(\d+-\d+\/\d+)/.exec(texto)?.[1] ?? ''
   }
-  expect(await ventana()).toBe('1-10/17')
+  // Sin pulso, la pista «pulsa la ↻» se queda una fila.
+  expect(await ventana()).toBe('1-9/17')
   pon(disco, `${ROOT}/docs/MI-MESA.md`, `${base}\n## Pulso\n\n\`\`\`\nabren: 62\ncierran: 57\n\`\`\`\n`)
   expect(await ventana()).toBe('1-9/17')
 })

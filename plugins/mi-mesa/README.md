@@ -555,8 +555,13 @@ que un servicio pausado no se olvide en silencio.
 | --- | --- | --- |
 | `Sin pulso: pon tu Jira en /config…` | la `↻` corre el guion del repo, y es una copia de antes del pulso | pon tu Jira en `/config` → mi-mesa |
 | lo mismo, con el Jira ya puesto | «Guion que regenera la mesa» tiene algo escrito, y ese campo manda sobre el generador del mod | déjalo vacío |
-| ni pulso ni aviso | el generador del mod escribió la mesa pero el pulso falló, y el motivo está al pie de `docs/MI-MESA.md`: «⚠️ Sin pulso de la semana: …» | lee esa línea |
-| la mesa entera vacía o vieja | la mesa no se genera sola al abrir la sesión | pulsa la `↻` |
+| `Sin pulso: pulsa la ↻ para generarlo con tu Jira` | el Jira está puesto, pero la mesa es de antes: la escribió un guion, o nadie ha pulsado la `↻` todavía; la mesa no se genera sola al abrir la sesión | pulsa la `↻` |
+| `Sin pulso: …` en color de aviso | el generador del mod escribió la mesa, pero el pulso falló, y ese es el motivo | lo que diga: el token, un ticket sin tipo, Jira caído |
+
+Desde la 1.12.1 el panel enseña **siempre** por qué falta el pulso: el motivo
+que el generador del mod deja al pie de la mesa —antes solo estaba en el
+fichero, que no abre nadie— o, con el Jira puesto y una mesa de antes, que
+falta pulsar la `↻`.
 
 Mientras la mesa no traiga pulso y no esté puesto el Jira, el panel lo dice en
 una línea apagada bajo la cuenta: `Sin pulso: pon tu Jira en /config → mi-mesa
