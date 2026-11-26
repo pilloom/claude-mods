@@ -1,5 +1,21 @@
 # Changelog
 
+## [1.12.0] — 2026-11-26
+
+### Varios proyectos de Jira, y proyectos en pausa
+
+- Para los equipos con un repo de microservicios y un espacio de Jira por
+  servicio, **«Jira: proyectos»** admite varias claves separadas por comas
+  (`LAN, PAG, NOT`). La mesa, el pulso y la carrera salen de todos a la vez.
+  Con una sola clave, todo sigue igual que antes.
+- Los hilos siguen siendo las etiquetas: un hilo como `sesiones` junta
+  tickets de varios servicios.
+- Nuevo **«Jira: proyectos en pausa»**: las claves que se ponen ahí no se
+  consultan, ni para la mesa ni para el pulso, y se cuentan al pie de la mesa.
+  Si todos están en pausa, la `↻` lo dice en vez de escribir una mesa vacía.
+- El README trae «No me sale el pulso», con los cuatro casos y qué hacer en
+  cada uno.
+
 ## [1.11.1] — 2026-11-23
 
 ### Un ejemplo de cómo escribir `nombres`

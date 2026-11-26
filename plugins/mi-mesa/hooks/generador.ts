@@ -24,7 +24,17 @@ export type ConfigJira = {
   url: string
   email: string
   token: string
-  proyecto: string
+  /**
+   * Las claves de proyecto, en mayúsculas (desde la 1.12.0 pueden ser varias:
+   * el repo de microservicios con un espacio de Jira por servicio).
+   */
+  proyectos: readonly string[]
+  /**
+   * Los proyectos en pausa (desde la 1.12.0): siguen en la lista, pero no se
+   * consultan, ni para la mesa ni para el pulso. Se pausan y se reanudan sin
+   * tener que acordarse de la clave para volver a escribirla.
+   */
+  enPausa?: readonly string[]
   /** UUID del Team, o vacío para el proyecto entero. */
   team: string
   /** Etiquetas que no forman hilo, en minúsculas. */
@@ -330,10 +340,27 @@ export function seccionDelPulso(p: PulsoArmado, conNombres = false): string[] {
   ]
 }
 
-/** Las consultas, todas del mismo censo: el proyecto y, si se dijo, el Team. */
+/** Los proyectos que se consultan: los de la lista menos los que están en pausa. */
+export function activos(cfg: ConfigJira): string[] {
+  const pausa = new Set(cfg.enPausa ?? [])
+  return cfg.proyectos.filter(p => !pausa.has(p))
+}
+
+/** Los de la lista que están en pausa, que son los que se cuentan al pie. */
+export function pausados(cfg: ConfigJira): string[] {
+  const pausa = new Set(cfg.enPausa ?? [])
+  return cfg.proyectos.filter(p => pausa.has(p))
+}
+
+/**
+ * Las consultas, todas del mismo censo: los proyectos activos y, si se dijo, el
+ * Team. Con uno solo sale `project = "X"`, como antes de la 1.12.0.
+ */
 export function consultas(cfg: ConfigJira, campoTeam: number | undefined, desde: string) {
   const team = cfg.team ? ` AND cf[${campoTeam}] = "${cfg.team}"` : ''
-  const censo = `project = "${cfg.proyecto}"${team}`
+  const ps = activos(cfg)
+  const proyecto = ps.length === 1 ? `project = "${ps[0]}"` : `project in (${ps.map(p => `"${p}"`).join(', ')})`
+  const censo = `${proyecto}${team}`
   const abierto = `${censo} AND statusCategory != Done`
   return {
     mios: `${abierto} AND (assignee = currentUser() OR reporter = currentUser()) ORDER BY updated DESC`,
@@ -351,7 +378,11 @@ export function problemaDeConfig(cfg: ConfigJira): string | undefined {
   if (!/^https:\/\/[^\s/]+/u.test(cfg.url)) return 'La URL de Jira tiene que empezar por https://'
   if (!cfg.email) return 'Falta el correo de Jira'
   if (!cfg.token) return 'Falta el token de Jira'
-  if (!CLAVE_PROYECTO.test(cfg.proyecto)) return `«${cfg.proyecto}» no es una clave de proyecto (p. ej. ABC)`
+  if (cfg.proyectos.length === 0) return 'Falta el proyecto de Jira'
+  const mala = [...cfg.proyectos, ...(cfg.enPausa ?? [])].find(p => !CLAVE_PROYECTO.test(p))
+  if (mala !== undefined) return `«${mala}» no es una clave de proyecto (p. ej. ABC)`
+  if (activos(cfg).length === 0)
+    return 'Todos tus proyectos están en pausa: reanuda alguno en «Jira: proyectos en pausa»'
   if (cfg.team && !UUID.test(cfg.team))
     return 'El Team va por su UUID, no por su nombre: por nombre Jira contesta 0 resultados sin error'
   return undefined
@@ -378,7 +409,7 @@ export async function generar(cliente: Cliente, cfg: ConfigJira, hoy: Date): Pro
     cliente.buscar(q.abiertos, CAMPOS_PULSO),
   ])
   if (cfg.team && abiertos.length === 0)
-    throw new Error(`El Team ${cfg.team} no tiene ningún abierto en ${cfg.proyecto}: revisa el UUID`)
+    throw new Error(`El Team ${cfg.team} no tiene ningún abierto en ${activos(cfg).join(', ')}: revisa el UUID`)
 
   const enMesa = mios.filter(i => !esEpica(i))
   const epicas = mios.length - enMesa.length
@@ -405,7 +436,10 @@ export async function generar(cliente: Cliente, cfg: ConfigJira, hoy: Date): Pro
   }
 
   const plural = (n: number, s: string) => `${n} ${s}${n === 1 ? '' : 's'}`
-  const ambito = cfg.team ? `proyecto **${cfg.proyecto}**, Team \`${cfg.team}\`` : `proyecto **${cfg.proyecto}**`
+  const ps = activos(cfg)
+  const enPausa = pausados(cfg)
+  const deProyecto = `${ps.length === 1 ? 'proyecto' : 'proyectos'} ${ps.map(p => `**${p}**`).join(', ')}`
+  const ambito = cfg.team ? `${deProyecto}, Team \`${cfg.team}\`` : deProyecto
   const out: string[] = [
     '# Mi mesa de trabajo',
     '',
@@ -428,7 +462,10 @@ export async function generar(cliente: Cliente, cfg: ConfigJira, hoy: Date): Pro
     '## Lo que NO está aquí',
     '',
     `- **${plural(epicas, 'épica')}** tuya${epicas === 1 ? '' : 's'}: son contenedores, nadie coge una.`,
-    `- **${sinAsignar}** abierto${sinAsignar === 1 ? '' : 's'} sin asignar en el ${cfg.team ? 'Team' : 'proyecto'}.`,
+    `- **${sinAsignar}** abierto${sinAsignar === 1 ? '' : 's'} sin asignar en el ${cfg.team ? 'Team' : ps.length === 1 ? 'proyecto' : 'los proyectos'}.`,
+    ...(enPausa.length
+      ? [`- **${plural(enPausa.length, 'proyecto')}** en pausa, que no se consulta${enPausa.length === 1 ? '' : 'n'} ni para la mesa ni para el pulso: ${enPausa.join(', ')}.`]
+      : []),
     ...(sinPulso ? [`- ⚠️ Sin pulso de la semana: ${sinPulso}.`] : []),
     '',
   )
