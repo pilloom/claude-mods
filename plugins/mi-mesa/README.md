@@ -519,7 +519,8 @@ Se activa en `/config` → **mi-mesa**:
 | **Jira: URL** | `https://<instancia>.atlassian.net` |
 | **Jira: correo** | el de tu cuenta de Jira |
 | **Jira: API token** | uno de id.atlassian.com → Seguridad → API tokens. Es un campo **sensible**: se guarda en el almacenamiento seguro, no en `settings.json` |
-| **Jira: proyecto** | la clave, p. ej. `ABC` |
+| **Jira: proyectos** | la clave, p. ej. `ABC`, o **varias separadas por comas** —`LAN, PAG, NOT`— si el repo abarca varios espacios de Jira |
+| **Jira: proyectos en pausa** | opcional, claves de la lista de arriba que no se consultan mientras tanto |
 | **Jira: Team (UUID)** | opcional. El UUID que sale en la URL de la página del Team. Vacío: el proyecto entero |
 | **Jira: etiquetas que no son hilo** | opcional, separadas por comas: áreas o componentes que no son un hilo de trabajo |
 
@@ -528,6 +529,34 @@ Con URL y proyecto puestos, la `↻` pregunta con lo que va a hacer delante
 Jira, escribe `docs/MI-MESA.md` y lo apunta en `.git/info/exclude`, porque la
 mesa es por persona. Si Jira falla —el token, la URL, un Team que no existe—,
 el error sale en rojo y **la mesa de antes se queda**.
+
+### Varios proyectos, y los que están en pausa
+
+Desde la 1.12.0 caben **varios proyectos**, para el repositorio de
+microservicios que en Jira tiene un espacio por servicio. Se consultan juntos
+—`project in ("LAN", "PAG", "NOT")`— y la mesa, el pulso y la carrera son de
+todos ellos a la vez.
+
+🔑 **Los hilos siguen siendo las etiquetas, no los proyectos.** Un hilo es un
+tema de trabajo y cruza servicios: el hilo `sesiones` junta la autenticación,
+el reinicio de contraseña y los refresh tokens aunque cada uno viva en su
+espacio. La clave de cada ticket ya dice de qué servicio es.
+
+Un proyecto **en pausa** sigue en la lista y no se consulta: ni llena tu mesa
+ni cuenta en el pulso. Fuera del pulso también, y no solo de la mesa, porque
+sus abiertos engordarían la meta de la carrera con trabajo que nadie va a tocar
+esa semana. Para reanudarlo basta con quitarlo de «en pausa», sin volver a
+escribir la clave. La mesa los cuenta al pie, en «Lo que NO está aquí», para
+que un servicio pausado no se olvide en silencio.
+
+### No me sale el pulso
+
+| Lo que ves | Por qué | Qué hacer |
+| --- | --- | --- |
+| `Sin pulso: pon tu Jira en /config…` | la `↻` corre el guion del repo, y es una copia de antes del pulso | pon tu Jira en `/config` → mi-mesa |
+| lo mismo, con el Jira ya puesto | «Guion que regenera la mesa» tiene algo escrito, y ese campo manda sobre el generador del mod | déjalo vacío |
+| ni pulso ni aviso | el generador del mod escribió la mesa pero el pulso falló, y el motivo está al pie de `docs/MI-MESA.md`: «⚠️ Sin pulso de la semana: …» | lee esa línea |
+| la mesa entera vacía o vieja | la mesa no se genera sola al abrir la sesión | pulsa la `↻` |
 
 Mientras la mesa no traiga pulso y no esté puesto el Jira, el panel lo dice en
 una línea apagada bajo la cuenta: `Sin pulso: pon tu Jira en /config → mi-mesa

@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 
-import { agrupar, consultas, emojiDeTipo, generar, inicioDeLaSemana, lineaDe, problemaDeConfig, tramoDe } from './generador'
+import { activos, agrupar, consultas, emojiDeTipo, generar, inicioDeLaSemana, lineaDe, problemaDeConfig, tramoDe } from './generador'
 import type { Cliente, ConfigJira, Issue } from './generador'
 import { base64, clienteJira } from './jira'
 import { parseMesa } from './parse'
@@ -9,7 +9,7 @@ const CFG: ConfigJira = {
   url: 'https://x.atlassian.net',
   email: 'yo@x.test',
   token: 't',
-  proyecto: 'ABC',
+  proyectos: ['ABC'],
   team: '',
   noHilos: ['backend'],
 }
@@ -147,4 +147,40 @@ test('con «Carrera con nombres» el generador escribe los nombres, y apagado no
   expect(md).toContain('carrera: 2/0 1/1 0/1')
   expect(md).toContain('nombres: Miguel Ángel Canto Poot | Tú | Wilberth Sansores')
   expect(parseMesa(md, 1).pulso?.carrera?.map(d => d.nombre)).toEqual(['Miguel Ángel Canto Poot', 'Tú', 'Wilberth Sansores'])
+})
+
+test('varios proyectos van en un solo censo, y los que están en pausa no se consultan', () => {
+  const cfg: ConfigJira = { ...CFG, proyectos: ['LAN', 'PAG', 'NOT'], enPausa: ['PAG'] }
+  expect(activos(cfg)).toEqual(['LAN', 'NOT'])
+  const q = consultas(cfg, undefined, '2026-11-10')
+  expect(q.abiertos).toBe('project in ("LAN", "NOT") AND statusCategory != Done')
+  expect(q.cerrados).toContain('project in ("LAN", "NOT")')
+  expect(q.mios).not.toContain('PAG')
+  // Con uno solo, la consulta de siempre.
+  expect(consultas({ ...cfg, enPausa: ['PAG', 'NOT'] }, undefined, '2026-11-10').abiertos).toBe(
+    'project = "LAN" AND statusCategory != Done',
+  )
+  expect(problemaDeConfig(cfg)).toBeUndefined()
+  expect(problemaDeConfig({ ...cfg, enPausa: ['LAN', 'PAG', 'NOT'] })).toMatch(/en pausa/)
+  expect(problemaDeConfig({ ...cfg, proyectos: [] })).toMatch(/Falta el proyecto/)
+  expect(problemaDeConfig({ ...cfg, enPausa: ['pa g'] })).toMatch(/no es una clave/)
+})
+
+test('la mesa dice al pie qué proyectos están en pausa', async () => {
+  const vistas: string[] = []
+  const cliente: Cliente = {
+    yo: async () => ({ accountId: 'yo', displayName: 'Yo' }),
+    campoTeam: async () => undefined,
+    buscar: async jql => {
+      vistas.push(jql)
+      return jql.includes('currentUser()') ? [i('LAN-1', ['sesiones']), i('NOT-7', ['sesiones'])] : [i('LAN-1')]
+    },
+  }
+  const md = await generar(cliente, { ...CFG, proyectos: ['LAN', 'PAG', 'NOT'], enPausa: ['PAG'] }, new Date(2026, 10, 15, 12))
+  // Un hilo abarca tickets de varios proyectos: el hilo es la etiqueta, no el espacio.
+  expect(parseMesa(md, 1).hilos.map(h => [h.title, h.tickets.map(t => t.key)])).toEqual([['sesiones (2)', ['LAN-1', 'NOT-7']]])
+  expect(md).toContain('proyectos **LAN**, **NOT**')
+  expect(md).toContain('**1 proyecto** en pausa')
+  expect(md).toContain(': PAG.')
+  expect(vistas.every(q => !q.includes('PAG'))).toBe(true)
 })

@@ -17,7 +17,7 @@ import {
   recortar,
   trozosDePulso,
 } from './parse'
-import { generar } from './generador'
+import { activos, generar } from './generador'
 import type { ConfigJira } from './generador'
 import { clienteJira } from './jira'
 
@@ -138,13 +138,16 @@ let jira: ConfigJira | undefined
 function jiraDe(options: Readonly<Record<string, unknown>>): ConfigJira | undefined {
   const s = (k: string) => (typeof options[k] === 'string' ? (options[k] as string).trim() : '')
   const url = s('jiraUrl')
-  const proyecto = s('jiraProyecto').toUpperCase()
-  if (!url || !proyecto) return undefined
+  // Varias claves desde la 1.12.0, separadas por comas o espacios: `LAN, PAG`.
+  const claves = (k: string) => [...new Set(s(k).toUpperCase().split(/[\s,;]+/u).filter(Boolean))]
+  const proyectos = claves('jiraProyecto')
+  if (!url || proyectos.length === 0) return undefined
   return {
     url,
     email: s('jiraEmail'),
     token: s('jiraToken'),
-    proyecto,
+    proyectos,
+    enPausa: claves('jiraProyectosEnPausa'),
     team: s('jiraTeam'),
     noHilos: s('etiquetasNoHilo')
       .split(',')
@@ -309,7 +312,8 @@ async function regenerarDentro($: EngineInterface, root: string, cfg: ConfigJira
   const fijo = { interno: true as const }
   await update($, regen, () => ({ fase: 'preguntando' as const, ...fijo }))
   const host = cfg.url.replace(/^https:\/\//u, '').replace(/\/.*$/u, '')
-  const ambito = cfg.team ? `${cfg.proyecto}, Team ${cfg.team.slice(0, 8)}…` : cfg.proyecto
+  const ps = activos(cfg).join(', ') || cfg.proyectos.join(', ')
+  const ambito = cfg.team ? `${ps}, Team ${cfg.team.slice(0, 8)}…` : ps
   if (!(await confirmar($, `el generador de mi-mesa (${host} · ${ambito})`))) {
     await update($, regen, () => ({ fase: 'quieto' as const, ...fijo }))
     return
