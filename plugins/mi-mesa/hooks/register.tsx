@@ -845,10 +845,20 @@ export const register: Register = (on, options) => {
      * copia vieja del guion se quedaba sin marcador ni carrera, y nada en el
      * panel le decía por qué ni qué hacer. Una línea, apagada, y solo en ese
      * caso: con el generador puesto la `↻` ya es la respuesta.
+     *
+     * Desde la 1.12.1, con el generador puesto también: si la mesa dice por
+     * qué no trae pulso —el generador lo escribe al pie—, el motivo, en color
+     * de aviso, porque es un fallo y no una pista. Y si no dice nada, la mesa
+     * es de antes del generador y lo que falta es pulsar la `↻`.
      */
-    const pista = !m.pulso && !reg.interno ? 'Sin pulso: pon tu Jira en /config → mi-mesa y la ↻ lo generará' : ''
+    const motivo = !m.pulso && m.sinPulso ? `Sin pulso: ${m.sinPulso}` : ''
+    const pista = m.pulso || motivo
+      ? ''
+      : reg.interno
+        ? 'Sin pulso: pulsa la ↻ para generarlo con tu Jira'
+        : 'Sin pulso: pon tu Jira en /config → mi-mesa y la ↻ lo generará'
     const cabecera =
-      2 + (marcador.length > 0 ? 1 : 0) + (m.error ? 1 : 0) + (reg.error ? 1 : 0) + (pista ? 1 : 0)
+      2 + (marcador.length > 0 ? 1 : 0) + (m.error ? 1 : 0) + (reg.error ? 1 : 0) + (pista || motivo ? 1 : 0)
     /**
      * La carrera de la semana, al pie de la mesa: tres filas —cifras, flechas
      * y pista— más la raya que la separa, que salen de la ventana de la mesa,
@@ -1107,6 +1117,11 @@ export const register: Register = (on, options) => {
           {pista ? (
             <Box key="pista" flexShrink={0}>
               <Text dimColor>{recortar(pista, width)}</Text>
+            </Box>
+          ) : null}
+          {motivo ? (
+            <Box key="motivo" flexShrink={0}>
+              <Text color="warning">{recortar(motivo, width)}</Text>
             </Box>
           ) : null}
           {reg.error ? (

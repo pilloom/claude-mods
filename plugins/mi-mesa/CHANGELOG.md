@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.12.1] — 2026-11-26
+
+### El panel dice por qué no hay pulso
+
+- Cuando el generador del mod escribía la mesa pero el pulso fallaba, el
+  motivo solo quedaba al pie de `docs/MI-MESA.md` y en el panel no se veía
+  nada. Ahora sale bajo la cuenta, en color de aviso: `Sin pulso: …`.
+- Con el Jira puesto y una mesa de antes —escrita por un guion, o sin
+  regenerar todavía—, el panel dice `Sin pulso: pulsa la ↻ para generarlo con
+  tu Jira`, en vez de no decir nada.
+
 ## [1.12.0] — 2026-11-26
 
 ### Varios proyectos de Jira, y proyectos en pausa
