@@ -1039,3 +1039,38 @@ export function trozosDeTicket(t: Ticket, cols: number): { antes: string; clave:
   if (!linea.startsWith(antes + t.key)) return { antes: '', clave: '', despues: linea + relleno }
   return { antes, clave: t.key, despues: linea.slice(antes.length + t.key.length) + relleno }
 }
+
+
+/**
+ * Las órdenes que abren `url` en el navegador, en el orden en que se prueban,
+ * según el sistema que dice `$.session.machine()` (desde la 1.13.1).
+ *
+ * Se elige por sistema y no se prueban todas en todas partes: un Mac no tiene
+ * por qué intentar `cmd.exe`. En Windows va `rundll32 url.dll,
+ * FileProtocolHandler`, que abre con el navegador predeterminado **sin pasar
+ * por `cmd`**: `cmd /c start "" url` depende de que el `""` del título llegue
+ * intacto —y citado por `process.run` puede no llegar— y de que la URL no
+ * traiga `&`, `^` ni `|`. `explorer.exe` tampoco sirve: abre, pero sale
+ * con 1 y el panel diría que falló.
+ *
+ * WSL es un Linux cuyo `release` lleva `microsoft`: ahí `open` y
+ * `xdg-open` no suelen estar, `wslview` solo con wslu, y el `rundll32.exe`
+ * de Windows se alcanza por el PATH de interop o por su ruta en `/mnt/c`.
+ * Sin sistema conocido se prueba todo, de lo más común a lo menos.
+ */
+export function ordenesParaAbrir(url: string, sistema?: { sysname: string; release: string }): string[][] {
+  const mac = [['open', url]]
+  const windows = [['rundll32.exe', 'url.dll,FileProtocolHandler', url]]
+  const wsl = [
+    ['wslview', url],
+    ['rundll32.exe', 'url.dll,FileProtocolHandler', url],
+    ['/mnt/c/Windows/System32/rundll32.exe', 'url.dll,FileProtocolHandler', url],
+    ['xdg-open', url],
+  ]
+  const linux = [['xdg-open', url]]
+  if (!sistema) return [...mac, ...linux, ...windows, ...wsl.filter(o => o[0] !== 'xdg-open' && o[0] !== 'rundll32.exe')]
+  if (sistema.sysname === 'Darwin') return mac
+  if (/^windows/iu.test(sistema.sysname)) return windows
+  if (sistema.sysname === 'Linux') return /microsoft|wsl/iu.test(sistema.release) ? wsl : linux
+  return [...linux, ...mac]
+}
