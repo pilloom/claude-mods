@@ -1,6 +1,6 @@
 {
   "name": "mi-mesa",
-  "version": "1.13.0",
+  "version": "1.13.1",
   "description": "Panel con tu mesa de trabajo (docs/MI-MESA.md) agrupada por hilo —cada clave abre su ticket en Jira y un ▷ lo arranca con tu frase—, el marcador de la semana —lo que se abre contra lo que se cierra—, la carrera del Team al pie —sin nombres salvo que lo enciendas—, y un botón para regenerarla —con el guion del repo o con el generador del propio mod contra tu Jira—, el post-it de NOTAS.md —que se escribe pidiéndolo o con /nota— y los últimos mensajes que le pasaste a Claude Code, más un sonido al acabar el turno",
   "types": "./types/index.d.ts",
   "author": {

@@ -1,5 +1,5 @@
 import { atom, read, update } from 'claude-code'
-import type { EngineInterface, Register, RenderElement } from 'claude-code'
+import type { EngineInterface, Register, RenderElement, RenderSurface } from 'claude-code'
 
 import type { Mesa, Notas, Prompt, Regen, Ticket } from '../types'
 import {
@@ -9,6 +9,7 @@ import {
   envolver,
   fraseDeArranque,
   GUIONES,
+  ordenesParaAbrir,
   parseHistory,
   parseMesa,
   parseNotas,
@@ -367,16 +368,29 @@ async function confirmar($: EngineInterface, con: string): Promise<boolean> {
 const ARRANCA = 'Arrancar'
 
 /**
- * Abre el ticket en el navegador, con `open` y no con un enlace del terminal.
+ * Abre el ticket en el navegador, con un botón y no con un enlace del terminal.
  *
  * Un hipervínculo OSC 8 solo se pulsa en los terminales que lo entienden, y
  * Terminal.app no es uno de ellos con seguridad; un botón del panel sí se pulsa
- * en todos donde se pulsa la `×` de las notas. Si `open` no está —fuera de
- * macOS— se dice con la dirección, que se puede copiar a mano.
+ * en todos donde se pulsa la `×` de las notas.
+ *
+ * Qué orden lo abre depende del sistema (`ordenesParaAbrir`): `open` en macOS
+ * y otra cosa en Windows, WSL o Linux. Vale la primera que sale con 0. Si
+ * ninguna, la dirección se copia al portapapeles y el aviso lo dice: pegarla en
+ * el navegador es un paso, y volver a escribirla a mano desde el aviso, varios.
  */
-async function abrirTicket($: EngineInterface, url: string): Promise<void> {
-  const { exitCode } = await $.process.run(['open', url], { timeoutMs: 10_000 }).catch(() => ({ exitCode: 1 }))
-  if (exitCode !== 0) $.ui.toast(`No se pudo abrir el navegador: ${url}`)
+async function abrirTicket($: EngineInterface, url: string, surface?: RenderSurface): Promise<void> {
+  const sistema = await $.session.machine().catch(() => undefined)
+  for (const orden of ordenesParaAbrir(url, sistema)) {
+    const { exitCode } = await $.process.run(orden, { timeoutMs: 10_000 }).catch(() => ({ exitCode: 1 }))
+    if (exitCode === 0) return
+  }
+  const copia = await $.ui.copy({ text: url, ...(surface ? { surface } : {}) }).catch(() => ({ isCopied: false }))
+  $.ui.toast(
+    copia.isCopied
+      ? `No se pudo abrir el navegador; la dirección quedó copiada: ${url}`
+      : `No se pudo abrir el navegador: ${url}`,
+  )
 }
 
 /**
@@ -895,8 +909,8 @@ export const register: Register = (on, options) => {
                     label={clave}
                     dimColor={tenue}
                     hover={{ scope: `clave-${t.key}`, color: 'cyan', underline: true }}
-                    onPress={() => {
-                      void abrirTicket($, url).catch(() => {})
+                    onPress={press => {
+                      void abrirTicket($, url, press.surface).catch(() => {})
                     }}
                   />,
                   <Text key="despues" dimColor={tenue}>

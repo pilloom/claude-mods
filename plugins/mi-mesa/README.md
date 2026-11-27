@@ -594,9 +594,26 @@ Solo habla con **Jira Cloud** (API v3, `search/jql`).
 **La clave abre el ticket.** Con «Jira: URL» puesta en `/config` (basta la
 URL, no hace falta el resto del generador), cada clave de la mesa es un botón
 que abre `https://<instancia>.atlassian.net/browse/LAN-2754` en el navegador.
-Es un botón con `open` y no un hipervínculo OSC 8 porque ese solo se pulsa en
-los terminales que lo entienden, y Terminal.app no es uno de ellos con
-seguridad. Sin URL la clave queda como texto y nada más cambia.
+Es un botón y no un hipervínculo OSC 8 porque ese solo se pulsa en los
+terminales que lo entienden, y Terminal.app no es uno de ellos con seguridad.
+Sin URL la clave queda como texto y nada más cambia.
+
+La orden que abre el navegador depende del sistema que dice el motor
+(`$.session.machine()`, desde la 1.13.1):
+
+| Sistema | Orden, en el orden en que se prueba |
+| --- | --- |
+| macOS | `open` |
+| Windows | `rundll32.exe url.dll,FileProtocolHandler` |
+| WSL | `wslview` → `rundll32.exe` de Windows (por el PATH o por `/mnt/c`) → `xdg-open` |
+| Linux | `xdg-open` |
+
+Vale la primera que sale con 0. ⚠️ En Windows **no** se usa `cmd /c start "" url`:
+depende de que el `""` del título llegue intacto a `cmd` y de que la URL no
+traiga `&`, `^` ni `|`, mientras que `rundll32` abre con el navegador
+predeterminado sin pasar por `cmd`. Tampoco `explorer.exe`, que abre pero sale
+con 1, y el panel diría que falló. Si ninguna orden funciona, la dirección se
+copia al portapapeles y el aviso lo dice.
 
 **El `▷` lo arranca.** Está pegado al borde derecho de cada ticket. Va apagado
 y se enciende al pasar por la fila, como la `×` de las notas. Al pulsarlo sale
@@ -818,7 +835,7 @@ las dos se verían apagadas**: están en un solo sitio cada una, al final de
 
 ```bash
 claude plugin validate .            # manifiesto y módulo, como los lee el motor
-claude plugin test .                # 134 tests
+claude plugin test .                # 139 tests
 ```
 
 Para los tipos hace falta que el motor haya cargado el mod alguna vez desde su

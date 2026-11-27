@@ -1235,16 +1235,34 @@ test('la barra del título lleva la versión del manifiesto, pegada a MI MESA', 
 })
 
 
-/** Los `open` que pidió el panel, y un `process.run` que los finge. */
-function navegador(on: On): string[][] {
-  const abiertos: string[][] = []
+/**
+ * Las órdenes con las que el panel intentó abrir una URL, y un `process.run`
+ * que las finge: `funciona` dice cuál sale con 0. Las demás llamadas —git, el
+ * historial— salen con 1, como en `sinGit`.
+ */
+function navegador(on: On, funciona: (orden: string) => boolean = o => o === 'open'): string[][] {
+  const intentos: string[][] = []
   on('process.run', async (_, e) => {
-    if (e.argv[0] === 'open') abiertos.push([...e.argv])
+    const esAbrir = String(e.argv[e.argv.length - 1] ?? '').startsWith('https://')
+    if (esAbrir) intentos.push([...e.argv])
     return {
-      value: { exitCode: e.argv[0] === 'open' ? 0 : 1, stdout: '', stderr: '', isStdoutTruncated: false, isStderrTruncated: false },
+      value: {
+        exitCode: esAbrir && funciona(String(e.argv[0])) ? 0 : 1,
+        stdout: '',
+        stderr: '',
+        isStdoutTruncated: false,
+        isStderrTruncated: false,
+      },
     }
   })
-  return abiertos
+  return intentos
+}
+
+/** El sistema que contesta `$.session.machine()`. */
+function sistema(on: On, sysname: string, release: string): void {
+  on('session.machine', async () => ({
+    value: { sysname, release, machine: 'x86_64', packageManagers: [], runtimes: [] },
+  }))
 }
 
 /** Lo que el mod envió como prompt. */
@@ -1260,6 +1278,7 @@ function enviados(on: On): { text: string; asUser?: boolean }[] {
 test('la clave abre el ticket en Jira con la URL de /config', { options: { jiraUrl: 'https://acme.atlassian.net/' } }, async ($, on) => {
   ficheros(on, ROOT, MD)
   abre(on)
+  sistema(on, 'Darwin', '24.1.0')
   const abiertos = navegador(on)
   await $.command.run({ command: 'mi-mesa', args: '' } as never)
   const ui = await $.ui.mount({ plugin: 'mi-mesa', surface: 'terminal', component: 'Pane', requestId: 'mi-mesa', props: {} as never })
@@ -1364,4 +1383,53 @@ test('la línea del ticket es una sola fila: marca, clave, resto y ▷ como herm
   // Un Fragment en medio se dibujaba como columna y partía la línea en tres filas.
   expect(hijosDe(await ui.drawn(), 'LAN-2669')).toEqual(['Text', 'Button', 'Text', 'Text', 'Button'])
   await ui.unmount()
+})
+
+const JIRA = { options: { jiraUrl: 'https://acme.atlassian.net' } }
+const URL_2669 = 'https://acme.atlassian.net/browse/LAN-2669'
+
+/** Monta el panel y pulsa la clave de LAN-2669. */
+async function pulsaClave($: Parameters<NonNullable<Parameters<typeof test>[2]>>[0]): Promise<void> {
+  await $.command.run({ command: 'mi-mesa', args: '' } as never)
+  const ui = await $.ui.mount({ plugin: 'mi-mesa', surface: 'terminal', component: 'Pane', requestId: 'mi-mesa', props: {} as never })
+  await ui.press({ key: 'abrir-LAN-2669' })
+  await ui.unmount()
+}
+
+test('en Windows la clave abre con rundll32, sin pasar por cmd', JIRA, async ($, on) => {
+  ficheros(on, ROOT, MD)
+  abre(on)
+  sistema(on, 'Windows_NT', '10.0.22631')
+  const intentos = navegador(on, o => o === 'rundll32.exe')
+  await pulsaClave($)
+  expect(intentos).toEqual([['rundll32.exe', 'url.dll,FileProtocolHandler', URL_2669]])
+})
+
+test('en WSL sin wslu la clave cae al rundll32 de Windows', JIRA, async ($, on) => {
+  ficheros(on, ROOT, MD)
+  abre(on)
+  sistema(on, 'Linux', '5.15.153.1-microsoft-standard-WSL2')
+  const intentos = navegador(on, o => o === 'rundll32.exe')
+  await pulsaClave($)
+  expect(intentos.map(o => o[0])).toEqual(['wslview', 'rundll32.exe'])
+})
+
+test('si nada abre el navegador, la dirección se copia y el aviso lo dice', JIRA, async ($, on) => {
+  ficheros(on, ROOT, MD)
+  abre(on)
+  sistema(on, 'Linux', '6.8.0-48-generic')
+  navegador(on, () => false)
+  const copiado: string[] = []
+  const avisos: string[] = []
+  on('ui.copy', async (_, e) => {
+    copiado.push(e.text)
+    return { value: { isCopied: true as const } }
+  })
+  on('ui.toast', async (_, e) => {
+    avisos.push((e as { text: string }).text)
+    return { value: undefined }
+  })
+  await pulsaClave($)
+  expect(copiado).toEqual([URL_2669])
+  expect(avisos).toEqual([`No se pudo abrir el navegador; la dirección quedó copiada: ${URL_2669}`])
 })

@@ -1,5 +1,21 @@
 # Changelog
 
+## [1.13.1] — 2026-11-27
+
+### Abrir el ticket también en Windows, WSL y Linux
+
+- En la 1.13.0 la clave solo abría el ticket en macOS: se llamaba a `open`, y
+  en Windows y en WSL salía «No se pudo abrir el navegador». Ahora el panel
+  pregunta al motor en qué sistema corre (`$.session.machine()`) y usa la orden
+  de ese sistema: `open` en macOS, `rundll32 url.dll,FileProtocolHandler` en
+  Windows, `wslview` o el `rundll32.exe` de Windows en WSL, y `xdg-open` en
+  Linux.
+- En Windows no se usa `cmd /c start "" url`: depende de que el `""` del
+  título llegue intacto y de que la URL no traiga `&`, `^` ni `|`.
+  `rundll32` abre con el navegador predeterminado sin pasar por `cmd`.
+- Si ninguna orden funciona, la dirección se copia al portapapeles y el aviso
+  lo dice, para pegarla en el navegador.
+
 ## [1.13.0] — 2026-11-27
 
 ### Abrir y arrancar un ticket desde el panel

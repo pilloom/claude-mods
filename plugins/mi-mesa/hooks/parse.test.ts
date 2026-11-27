@@ -4,6 +4,7 @@ import {
   anadirNota,
   anchoEnTerminal,
   fraseDeArranque,
+  ordenesParaAbrir,
   trozosDeTicket,
   urlDeTicket,
   carreraDe,
@@ -802,4 +803,19 @@ test('los trozos de la línea juntan la línea entera, rellenada hasta el ancho'
     expect(anchoEnTerminal(antes + clave + despues)).toBe(cols)
     expect((antes + clave + despues).trimEnd()).toBe(lineaDeTicket(T, cols + 1))
   }
+})
+
+test('las órdenes para abrir el navegador dependen del sistema', () => {
+  const u = 'https://acme.atlassian.net/browse/LAN-1'
+  expect(ordenesParaAbrir(u, { sysname: 'Darwin', release: '24.1.0' })).toEqual([['open', u]])
+  expect(ordenesParaAbrir(u, { sysname: 'Windows_NT', release: '10.0.22631' })).toEqual([
+    ['rundll32.exe', 'url.dll,FileProtocolHandler', u],
+  ])
+  expect(ordenesParaAbrir(u, { sysname: 'Linux', release: '6.8.0-48-generic' })).toEqual([['xdg-open', u]])
+  const wsl = ordenesParaAbrir(u, { sysname: 'Linux', release: '5.15.153.1-microsoft-standard-WSL2' })
+  expect(wsl.map(o => o[0])).toEqual(['wslview', 'rundll32.exe', '/mnt/c/Windows/System32/rundll32.exe', 'xdg-open'])
+  // Ni cmd ni explorer: cmd depende de cómo se cite el "" del título, y explorer sale con 1 aunque abra.
+  const todas = ordenesParaAbrir(u).map(o => o[0] ?? '')
+  expect(todas[0]).toBe('open')
+  expect(todas.some(o => /^(cmd|explorer)/u.test(o))).toBe(false)
 })
