@@ -160,6 +160,7 @@ export function comandoDe(ruta: string): string[] | undefined {
 export function parseMesa(text: string, mtimeMs: number): Omit<Mesa, 'repo'> {
   const generated = /generado\*\* por .*? el (\d{4}-\d{2}-\d{2})/i.exec(text)?.[1] ?? '?'
   const generador = GUION.exec(text)?.[1]
+  const jira = jiraDeCabecera(text)
   const hilos: Hilo[] = []
   let current: Hilo | undefined
   for (const raw of text.split('\n')) {
@@ -190,9 +191,30 @@ export function parseMesa(text: string, mtimeMs: number): Omit<Mesa, 'repo'> {
     hilos: hilos.filter(h => h.tickets.length > 0),
     mtimeMs,
     ...(generador === undefined ? {} : { generador }),
+    ...(jira === undefined ? {} : { jira }),
     ...(pulso === undefined ? {} : { pulso }),
     ...(sinPulso ? { sinPulso } : {}),
   }
+}
+
+/**
+ * La instancia de Jira que la cabecera de la mesa declara (desde la 1.14.0):
+ * una línea `> Jira: https://<instancia>.atlassian.net`, que el guion de cada
+ * repositorio escribe junto a la de «Generado por».
+ *
+ * Va en la mesa y no solo en `/config` porque `/config` es uno para todos los
+ * repositorios, y no todos van contra la misma instancia: con una URL global la
+ * clave de un repo abría el Jira de otro. Quien sabe a qué instancia pregunta
+ * es el guion, igual que sabe el tramo de la semana.
+ *
+ * Solo se lee en la **cabecera** —lo de antes del primer `##`—: un `Jira:`
+ * citado en la prosa de un hilo no es la instancia de nada. Y solo `https://`,
+ * recortada a su origen: `/browse/` lo pone el panel.
+ */
+export function jiraDeCabecera(text: string): string | undefined {
+  const cabecera = text.split(/^## /mu)[0] ?? ''
+  const m = /^>\s*(?:\*\*)?Jira(?:\*\*)?\s*:\s*(?:\*\*)?\s*<?(https:\/\/[^\s/<>`*)]+)/imu.exec(cabecera)
+  return m?.[1]
 }
 
 /** La línea con la que el generador del mod dice por qué no hay pulso. */

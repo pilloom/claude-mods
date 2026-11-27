@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.14.0] — 2026-11-27
+
+### La instancia de Jira, por repositorio
+
+- «Jira: URL» de `/config` es una sola para todos los repos, y no todos van
+  contra la misma instancia: la clave de un repo podía abrir el Jira de otro.
+  Ahora la mesa puede declarar su instancia en la cabecera, con una línea
+  `> Jira: https://<instancia>.atlassian.net`, y el panel la usa antes que la
+  de `/config`.
+- La escribe el guion de cada repositorio, que es quien sabe a qué instancia
+  pregunta; el generador del mod la escribe ya. Una mesa sin la línea se
+  comporta como antes.
+
 ## [1.13.1] — 2026-11-27
 
 ### Abrir el ticket también en Windows, WSL y Linux

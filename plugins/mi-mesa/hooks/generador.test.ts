@@ -88,6 +88,8 @@ test('lo que escribe el generador lo lee el panel: hilos, tickets y pulso', asyn
   expect(m.pulso).toMatchObject({ tramo: 'MAR-DOM', abren: 0, cierran: 1, tuyos: 1, pendientes: 1, meta: 2 })
   // La épica no entra en la mesa: se cuenta al pie.
   expect(md).toContain('**1 épica** tuya')
+  // La mesa dice contra qué instancia se generó, y el panel abre ahí los tickets.
+  expect(m.jira).toBe('https://x.atlassian.net')
 })
 
 test('un Team con censo vacío es un error, no una mesa vacía', async () => {

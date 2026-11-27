@@ -31,6 +31,12 @@ export type Mesa = {
    */
   generador?: string
   /**
+   * La instancia de Jira que declara la cabecera (`> Jira: https://…`), desde
+   * la 1.14.0. Manda sobre la URL de `/config` para abrir los tickets, porque
+   * cada repositorio puede ir contra una instancia distinta.
+   */
+  jira?: string
+  /**
    * El marcador de la semana, si el guion de ese repositorio lo escribe.
    *
    * Va en la mesa y no en un fichero aparte porque es la misma consulta y el

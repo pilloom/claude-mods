@@ -4,6 +4,7 @@ import {
   anadirNota,
   anchoEnTerminal,
   fraseDeArranque,
+  jiraDeCabecera,
   ordenesParaAbrir,
   trozosDeTicket,
   urlDeTicket,
@@ -818,4 +819,17 @@ test('las órdenes para abrir el navegador dependen del sistema', () => {
   const todas = ordenesParaAbrir(u).map(o => o[0] ?? '')
   expect(todas[0]).toBe('open')
   expect(todas.some(o => /^(cmd|explorer)/u.test(o))).toBe(false)
+})
+
+test('la instancia de Jira sale de la cabecera de la mesa, y solo de ahí', () => {
+  const cab = (linea: string) => `# Mi mesa de trabajo\n\n> 🤖 **Generado** por \`x.js\` el 2026-11-27.\n${linea}\n\n## hilo (1)\n`
+  expect(jiraDeCabecera(cab('> Jira: https://rbsistemas.atlassian.net'))).toBe('https://rbsistemas.atlassian.net')
+  expect(jiraDeCabecera(cab('> **Jira:** https://rbsistemas.atlassian.net/'))).toBe('https://rbsistemas.atlassian.net')
+  expect(jiraDeCabecera(cab('> Jira: <https://rbsistemas.atlassian.net/jira/software>'))).toBe('https://rbsistemas.atlassian.net')
+  // Sin https, o fuera de la cabecera, no es la instancia de nada.
+  expect(jiraDeCabecera(cab('> Jira: http://rbsistemas.atlassian.net'))).toBeUndefined()
+  expect(jiraDeCabecera(cab('') + '> Jira: https://otra.atlassian.net\n')).toBeUndefined()
+  expect(jiraDeCabecera(cab(''))).toBeUndefined()
+  expect(parseMesa(cab('> Jira: https://rbsistemas.atlassian.net'), 1).jira).toBe('https://rbsistemas.atlassian.net')
+  expect('jira' in parseMesa(cab(''), 1)).toBe(false)
 })
