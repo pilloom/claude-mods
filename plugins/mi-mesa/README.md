@@ -598,6 +598,23 @@ Es un botón y no un hipervínculo OSC 8 porque ese solo se pulsa en los
 terminales que lo entienden, y Terminal.app no es uno de ellos con seguridad.
 Sin URL la clave queda como texto y nada más cambia.
 
+**La instancia es la de la mesa** (desde la 1.14.0). «Jira: URL» de `/config`
+es una para todos los repositorios, y no todos van contra la misma instancia.
+Por eso la mesa puede declarar la suya en la **cabecera** —lo de antes del
+primer `##`—, junto a la línea de «Generado por»:
+
+```markdown
+> 🤖 **Generado** por `scripts/qa/listar-mi-mesa.js` el 2026-11-27, para …
+> Jira: https://<instancia>.atlassian.net
+```
+
+Si la trae, manda sobre `/config`; si no, vale la de `/config`; sin ninguna, la
+clave es texto. Se lee solo en la cabecera, porque un `Jira:` citado en un hilo
+no es la instancia de nada, y solo `https://`, recortada a su origen. La escribe
+el guion de cada repositorio, que es quien sabe a qué instancia pregunta, igual
+que sabe el tramo de la semana; el generador del mod la escribe ya. La mesa que
+no la trae se pinta como siempre.
+
 La orden que abre el navegador depende del sistema que dice el motor
 (`$.session.machine()`, desde la 1.13.1):
 
@@ -835,7 +852,7 @@ las dos se verían apagadas**: están en un solo sitio cada una, al final de
 
 ```bash
 claude plugin validate .            # manifiesto y módulo, como los lee el motor
-claude plugin test .                # 139 tests
+claude plugin test .                # 142 tests
 ```
 
 Para los tipos hace falta que el motor haya cargado el mod alguna vez desde su

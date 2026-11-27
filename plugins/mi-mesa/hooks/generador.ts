@@ -445,6 +445,7 @@ export async function generar(cliente: Cliente, cfg: ConfigJira, hoy: Date): Pro
     '',
     `> 🤖 **Generado** por \`mi-mesa\` el ${fechaLocal(hoy)}, para **${yo.displayName || 'ti'}**, ${ambito}.`,
     '> **No se versiona** —es por persona— y **no se edita a mano**: lo reescribe la ↻ del panel.',
+    `> Jira: ${cfg.url.replace(/\/+$/u, '')}`,
     '',
     `**${plural(enMesa.length, 'ticket')}** en **${plural(grupos.length, 'hilo')}**: lo abierto que tienes asignado o creaste.`,
     '',

@@ -1433,3 +1433,24 @@ test('si nada abre el navegador, la dirección se copia y el aviso lo dice', JIR
   expect(copiado).toEqual([URL_2669])
   expect(avisos).toEqual([`No se pudo abrir el navegador; la dirección quedó copiada: ${URL_2669}`])
 })
+
+/** La mesa de siempre, con la instancia de Jira en la cabecera. */
+const MD_JIRA = MD.replace('\n\n## ', '\n> Jira: https://otra.atlassian.net\n\n## ')
+
+test('la instancia de la mesa manda sobre la URL de /config', JIRA, async ($, on) => {
+  ficheros(on, ROOT, MD_JIRA)
+  abre(on)
+  sistema(on, 'Darwin', '24.1.0')
+  const intentos = navegador(on)
+  await pulsaClave($)
+  expect(intentos).toEqual([['open', 'https://otra.atlassian.net/browse/LAN-2669']])
+})
+
+test('con la instancia en la mesa la clave abre aunque /config no tenga URL', async ($, on) => {
+  ficheros(on, ROOT, MD_JIRA)
+  abre(on)
+  sistema(on, 'Darwin', '24.1.0')
+  const intentos = navegador(on)
+  await pulsaClave($)
+  expect(intentos).toEqual([['open', 'https://otra.atlassian.net/browse/LAN-2669']])
+})

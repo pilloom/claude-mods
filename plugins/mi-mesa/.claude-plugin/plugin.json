@@ -1,6 +1,6 @@
 {
   "name": "mi-mesa",
-  "version": "1.13.1",
+  "version": "1.14.0",
   "description": "Panel con tu mesa de trabajo (docs/MI-MESA.md) agrupada por hilo —cada clave abre su ticket en Jira y un ▷ lo arranca con tu frase—, el marcador de la semana —lo que se abre contra lo que se cierra—, la carrera del Team al pie —sin nombres salvo que lo enciendas—, y un botón para regenerarla —con el guion del repo o con el generador del propio mod contra tu Jira—, el post-it de NOTAS.md —que se escribe pidiéndolo o con /nota— y los últimos mensajes que le pasaste a Claude Code, más un sonido al acabar el turno",
   "types": "./types/index.d.ts",
   "author": {
@@ -29,7 +29,7 @@
     "jiraUrl": {
       "type": "string",
       "default": "",
-      "description": "La URL de tu Jira Cloud, https://<instancia>.atlassian.net. Con ella la clave de cada ticket del panel abre su página; con ella y el proyecto, además, la ↻ escribe la mesa —con pulso y carrera— sin guion en el repo",
+      "description": "La URL de tu Jira Cloud, https://<instancia>.atlassian.net. Con ella la clave de cada ticket del panel abre su página, salvo que la mesa diga su propia instancia (> Jira: …); con ella y el proyecto, además, la ↻ escribe la mesa —con pulso y carrera— sin guion en el repo",
       "title": "Jira: URL"
     },
     "jiraEmail": {

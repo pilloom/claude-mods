@@ -892,7 +892,8 @@ export const register: Register = (on, options) => {
            se rellena hasta el `▷`: así el botón queda siempre en el mismo
            sitio. La fila es el ámbito del hover, como la de cada nota. */
         const tenue = t.mark === '·'
-        const url = urlDeTicket(jiraBase, t.key)
+        // La instancia de la mesa manda: `/config` es una para todos los repos.
+        const url = urlDeTicket(m.jira ?? jiraBase, t.key)
         const { antes, clave, despues } = trozosDeTicket(t, Math.max(1, width - 3))
         filas.push(
           <Box key={t.key} flexDirection="row" flexShrink={0}>
