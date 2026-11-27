@@ -1,5 +1,24 @@
 # Changelog
 
+## [1.13.0] — 2026-11-27
+
+### Abrir y arrancar un ticket desde el panel
+
+- **La clave abre el ticket en Jira.** Con «Jira: URL» puesta en `/config`,
+  cada clave del panel es un botón: al pulsarla se abre
+  `<URL>/browse/<clave>` en el navegador con `open`. Se usa un botón y no un
+  hipervínculo del terminal porque en Terminal.app un hipervínculo no siempre
+  se puede pulsar, y los botones del panel funcionan en cualquier terminal. Sin
+  URL, la clave queda como texto, como hasta ahora.
+- **Un `▷` arranca el ticket.** Está en el borde derecho de cada línea y se
+  enciende al pasar por la fila. Al pulsarlo sale el diálogo de la `↻`:
+  «Arrancar» envía la frase tal cual, lo que escribas en el diálogo se añade
+  al final, y «Dejarlo» o escape no envían nada. La frase llega como si la
+  hubieras tecleado tú.
+- Nuevo **«Frase para arrancar un ticket»** en `/config`, con `{clave}` y
+  `{titulo}`. Vacío es `arranca {clave}`, que vale para cualquier equipo,
+  tenga o no un fichero de flujo de trabajo.
+
 ## [1.12.1] — 2026-11-26
 
 ### El panel dice por qué no hay pulso

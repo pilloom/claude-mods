@@ -1,14 +1,14 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register, RenderElement } from 'claude-code'
 
-import type { Mesa, Notas, Prompt, Regen } from '../types'
+import type { Mesa, Notas, Prompt, Regen, Ticket } from '../types'
 import {
   anadirNota,
   carreraDe,
   comandoDe,
   envolver,
+  fraseDeArranque,
   GUIONES,
-  lineaDeTicket,
   parseHistory,
   parseMesa,
   parseNotas,
@@ -16,6 +16,8 @@ import {
   quitarNotaN,
   recortar,
   trozosDePulso,
+  trozosDeTicket,
+  urlDeTicket,
 } from './parse'
 import { activos, generar } from './generador'
 import type { ConfigJira } from './generador'
@@ -163,6 +165,15 @@ function jiraDe(options: Readonly<Record<string, unknown>>): ConfigJira | undefi
  * esté encendido. Apagado, la pista es la de siempre aunque la mesa los traiga.
  */
 let conNombres = false
+
+/**
+ * La URL de Jira de `/config`, aunque no haya proyecto: basta para que la
+ * clave de cada ticket abra su página. Sin ella la clave es texto (1.13.0).
+ */
+let jiraBase: string | undefined
+
+/** «Frase para arrancar» de `/config`; vacía, `arranca {clave}`. */
+let plantillaArranque: string | undefined
 
 // La mesa es la del repo en el que corre la sesión: backend, front o el que
 // tenga su docs/MI-MESA.md. El título del panel lleva el nombre de esa carpeta.
@@ -350,6 +361,49 @@ async function confirmar($: EngineInterface, con: string): Promise<boolean> {
     // Cerrado con escape, o una sesión en la que no hay a quién preguntar.
     return false
   }
+}
+
+/** La opción del diálogo del `▷` que envía la frase tal cual. */
+const ARRANCA = 'Arrancar'
+
+/**
+ * Abre el ticket en el navegador, con `open` y no con un enlace del terminal.
+ *
+ * Un hipervínculo OSC 8 solo se pulsa en los terminales que lo entienden, y
+ * Terminal.app no es uno de ellos con seguridad; un botón del panel sí se pulsa
+ * en todos donde se pulsa la `×` de las notas. Si `open` no está —fuera de
+ * macOS— se dice con la dirección, que se puede copiar a mano.
+ */
+async function abrirTicket($: EngineInterface, url: string): Promise<void> {
+  const { exitCode } = await $.process.run(['open', url], { timeoutMs: 10_000 }).catch(() => ({ exitCode: 1 }))
+  if (exitCode !== 0) $.ui.toast(`No se pudo abrir el navegador: ${url}`)
+}
+
+/**
+ * Pregunta y envía la frase de arranque del ticket como si la tecleases tú.
+ *
+ * El diálogo es el de la `↻`: hace de confirmación —un clic de paso no
+ * arranca trabajo— y su casilla de texto libre es el «algo más», que se pega
+ * al final de la frase en lugar de sustituirla. Escape, `Dejarlo` o una
+ * sesión sin nadie a quien preguntar no envían nada.
+ *
+ * Va con `asUser`: es la orden que darías tú, y el modelo la lee como tuya y
+ * no como el mensaje de un mod.
+ */
+async function arrancar($: EngineInterface, t: Pick<Ticket, 'key' | 'summary'>): Promise<void> {
+  const frase = fraseDeArranque(plantillaArranque, t)
+  let dicho: string
+  try {
+    dicho = await $.ui.ask(`¿Arrancar ${t.key}? Se enviará «${frase}». Para añadirle algo, escríbelo.`, {
+      options: [ARRANCA, 'Dejarlo'],
+      header: 'Mi mesa',
+    })
+  } catch {
+    return
+  }
+  const texto = dicho.trim()
+  if (!texto || texto === 'Dejarlo') return
+  await $.prompt.submit({ text: texto === ARRANCA ? frase : fraseDeArranque(plantillaArranque, t, texto), asUser: true })
 }
 
 /**
@@ -572,6 +626,8 @@ export const register: Register = (on, options) => {
   configurado = typeof options.generador === 'string' ? options.generador.trim() : undefined
   jira = jiraDe(options)
   conNombres = options.carreraConNombres === true
+  jiraBase = typeof options.jiraUrl === 'string' ? options.jiraUrl : undefined
+  plantillaArranque = typeof options.fraseArrancar === 'string' ? options.fraseArrancar : undefined
 
   on('session.start', async ($, e, next) => {
     await $.command.register({
@@ -817,10 +873,53 @@ export const register: Register = (on, options) => {
            caracteres y descuenta el ` → dueño`: pasarse de ancho envuelve la
            línea, descuadra la ventana —que cuenta una fila por ticket— y la
            caja de arriba pierde una fila por algún sitio. */
+        /* La clave abre el ticket en Jira —si hay URL en `/config`— y el `▷`
+           del borde derecho lo arranca. Dos columnas menos para la línea, que
+           se rellena hasta el `▷`: así el botón queda siempre en el mismo
+           sitio. La fila es el ámbito del hover, como la de cada nota. */
+        const tenue = t.mark === '·'
+        const url = urlDeTicket(jiraBase, t.key)
+        const { antes, clave, despues } = trozosDeTicket(t, Math.max(1, width - 3))
         filas.push(
-          <Text key={t.key} dimColor={t.mark === '·'}>
-            {lineaDeTicket(t, width)}
-          </Text>,
+          <Box key={t.key} flexDirection="row" flexShrink={0}>
+            {/* Un arreglo y no un Fragment: el motor dibuja el Fragment como una
+                Box en columna, y la línea se partía en tres filas. */}
+            {url && clave
+              ? [
+                  <Text key="antes" dimColor={tenue}>
+                    {antes}
+                  </Text>,
+                  <Button
+                    key={`abrir-${t.key}`}
+                    plain
+                    label={clave}
+                    dimColor={tenue}
+                    hover={{ scope: `clave-${t.key}`, color: 'cyan', underline: true }}
+                    onPress={() => {
+                      void abrirTicket($, url).catch(() => {})
+                    }}
+                  />,
+                  <Text key="despues" dimColor={tenue}>
+                    {despues}
+                  </Text>,
+                ]
+              : [
+                  <Text key="linea" dimColor={tenue}>
+                    {`${antes}${clave}${despues}`}
+                  </Text>,
+                ]}
+            <Text> </Text>
+            <Button
+              key={`arrancar-${t.key}`}
+              plain
+              dimColor
+              label="▷"
+              hover={{ color: 'green', bold: true }}
+              onPress={() => {
+                void arrancar($, t).catch(() => {})
+              }}
+            />
+          </Box>,
         )
       }
     })

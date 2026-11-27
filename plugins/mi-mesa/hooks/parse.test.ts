@@ -3,6 +3,9 @@ import { expect, test } from 'claude-code/testing'
 import {
   anadirNota,
   anchoEnTerminal,
+  fraseDeArranque,
+  trozosDeTicket,
+  urlDeTicket,
   carreraDe,
   comandoDe,
   inicialesDe,
@@ -766,4 +769,37 @@ test('parseMesa lee por qué no hay pulso, y solo cuando no lo hay', () => {
   expect(parseMesa('# Mi mesa\n', 1).sinPulso).toBeUndefined()
   const conPulso = '## Pulso de la semana\n\n```\nabren: 3\ncierran: 2\n```\n\n' + pie
   expect(parseMesa(conPulso, 1).sinPulso).toBeUndefined()
+})
+
+
+const T = { mark: '▶', tipo: '🐞', key: 'LAN-2754', priority: 'ALTA', summary: 'La mesa no afirma', owner: '' } as never
+
+test('la frase de arranque: por defecto, con plantilla y con algo más', () => {
+  expect(fraseDeArranque(undefined, T)).toBe('arranca LAN-2754')
+  expect(fraseDeArranque('   ', T)).toBe('arranca LAN-2754')
+  expect(fraseDeArranque('arranca {clave} según docs/FLUJO.md previa revisión del ticket', T)).toBe(
+    'arranca LAN-2754 según docs/FLUJO.md previa revisión del ticket',
+  )
+  expect(fraseDeArranque('{clave}: {titulo}', T)).toBe('LAN-2754: La mesa no afirma')
+  // Sin {clave} la clave va al final: una frase sin ticket no arranca nada.
+  expect(fraseDeArranque('empieza', T)).toBe('empieza LAN-2754')
+  expect(fraseDeArranque(undefined, T, '  y ojo con staging ')).toBe('arranca LAN-2754 y ojo con staging')
+})
+
+test('la URL del ticket sale de la de /config y solo si es https', () => {
+  expect(urlDeTicket('https://acme.atlassian.net/', 'LAN-2754')).toBe('https://acme.atlassian.net/browse/LAN-2754')
+  expect(urlDeTicket('', 'LAN-2754')).toBeUndefined()
+  expect(urlDeTicket(undefined, 'LAN-2754')).toBeUndefined()
+  expect(urlDeTicket('http://acme.atlassian.net', 'LAN-2754')).toBeUndefined()
+  expect(urlDeTicket('https://acme.atlassian.net', 'no es clave')).toBeUndefined()
+})
+
+test('los trozos de la línea juntan la línea entera, rellenada hasta el ancho', () => {
+  for (const cols of [20, 40, 80]) {
+    const { antes, clave, despues } = trozosDeTicket(T, cols)
+    expect(clave).toBe('LAN-2754')
+    expect(antes).toBe('▶ 🐞 ')
+    expect(anchoEnTerminal(antes + clave + despues)).toBe(cols)
+    expect((antes + clave + despues).trimEnd()).toBe(lineaDeTicket(T, cols + 1))
+  }
 })

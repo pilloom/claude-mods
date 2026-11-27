@@ -515,13 +515,15 @@ test('la equis de una nota la quita del fichero y del panel', async ($, on) => {
     requestId: 'mi-mesa',
   })
   // Una equis por nota, cada una con su clave: la del panel es la de su sitio.
-  expect(await ui.findAll({ type: 'Button' })).toHaveLength(2)
+  // Solo las equis: los ▷ de los tickets también son botones (1.13.0).
+  expect(await ui.find({ type: 'Button', key: 'quitar-1' })).toBeDefined()
   await ui.press({ key: 'quitar-0' })
   expect(disco.get(NOTAS_FILE)).toEqual('# Notas\n\n- firmar el anexo\n')
   // El panel no espera al ciclo de 15 s: la nota se va al pulsar.
   expect(await ui.find({ type: 'Text', text: '• llamar al banco' })).toBeUndefined()
   expect(await ui.find({ type: 'Text', text: '• firmar el anexo' })).toBeDefined()
-  expect(await ui.findAll({ type: 'Button' })).toHaveLength(1)
+  expect(await ui.find({ type: 'Button', key: 'quitar-0' })).toBeDefined()
+  expect(await ui.find({ type: 'Button', key: 'quitar-1' })).toBeUndefined()
   await ui.unmount()
 })
 
@@ -799,7 +801,10 @@ test('con Jira en /config la ↻ usa el generador del mod, aunque la cabecera no
   // La mesa es por persona: queda fuera de git en este clon.
   expect(disco.get(`${ROOT}/.git/info/exclude`) ?? '').toContain('/docs/MI-MESA.md')
   // El panel ya enseña la mesa nueva, sin guion, con su ticket y sin la pista.
-  expect(await ui.find({ type: 'Text', text: /▶ ✅ ABC-1 ALTA Lo de ABC-1/ })).toBeDefined()
+  // Con la URL de Jira la clave es su propio botón, entre la marca y el resto.
+  expect(await ui.find({ type: 'Text', text: /^▶ ✅ $/ })).toBeDefined()
+  expect(await ui.find({ type: 'Button', key: 'abrir-ABC-1' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /^ ALTA Lo de ABC-1/ })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /Sin pulso/ })).toBeUndefined()
   await ui.unmount()
 })
@@ -1226,5 +1231,137 @@ test('la barra del título lleva la versión del manifiesto, pegada a MI MESA', 
     requestId: 'mi-mesa',
   })
   expect(await ui.find({ type: 'Text', text: /^ MI MESA v9\.9\.9 · BACKEND_LANZADERA / })).toBeDefined()
+  await ui.unmount()
+})
+
+
+/** Los `open` que pidió el panel, y un `process.run` que los finge. */
+function navegador(on: On): string[][] {
+  const abiertos: string[][] = []
+  on('process.run', async (_, e) => {
+    if (e.argv[0] === 'open') abiertos.push([...e.argv])
+    return {
+      value: { exitCode: e.argv[0] === 'open' ? 0 : 1, stdout: '', stderr: '', isStdoutTruncated: false, isStderrTruncated: false },
+    }
+  })
+  return abiertos
+}
+
+/** Lo que el mod envió como prompt. */
+function enviados(on: On): { text: string; asUser?: boolean }[] {
+  const lista: { text: string; asUser?: boolean }[] = []
+  on('prompt.submit', async (_, e) => {
+    lista.push({ text: e.text, asUser: (e.origin as { asUser?: boolean } | undefined)?.asUser })
+    return { text: e.text }
+  })
+  return lista
+}
+
+test('la clave abre el ticket en Jira con la URL de /config', { options: { jiraUrl: 'https://acme.atlassian.net/' } }, async ($, on) => {
+  ficheros(on, ROOT, MD)
+  abre(on)
+  const abiertos = navegador(on)
+  await $.command.run({ command: 'mi-mesa', args: '' } as never)
+  const ui = await $.ui.mount({ plugin: 'mi-mesa', surface: 'terminal', component: 'Pane', requestId: 'mi-mesa', props: {} as never })
+  await ui.press({ key: 'abrir-LAN-2669' })
+  expect(abiertos).toEqual([['open', 'https://acme.atlassian.net/browse/LAN-2669']])
+  await ui.unmount()
+})
+
+test('sin URL de Jira la clave es texto, pero el ▷ sigue', async ($, on) => {
+  ficheros(on, ROOT, MD)
+  sinGit(on)
+  abre(on)
+  await $.command.run({ command: 'mi-mesa', args: '' } as never)
+  const ui = await $.ui.mount({ plugin: 'mi-mesa', surface: 'terminal', component: 'Pane', requestId: 'mi-mesa', props: {} as never })
+  expect(await ui.find({ type: 'Button', key: 'abrir-LAN-2669' })).toBeUndefined()
+  expect(await ui.find({ type: 'Button', key: 'arrancar-LAN-2669' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /▶ LAN-2669 ALTA/ })).toBeDefined()
+  await ui.unmount()
+})
+
+test('el ▷ pregunta y envía la frase por defecto como tuya', async ($, on) => {
+  ficheros(on, ROOT, MD)
+  sinGit(on)
+  abre(on)
+  const preguntas = contesta(on, 'Arrancar')
+  const lista = enviados(on)
+  await $.command.run({ command: 'mi-mesa', args: '' } as never)
+  const ui = await $.ui.mount({ plugin: 'mi-mesa', surface: 'terminal', component: 'Pane', requestId: 'mi-mesa', props: {} as never })
+  await ui.press({ key: 'arrancar-LAN-2669' })
+  expect(preguntas).toEqual(['¿Arrancar LAN-2669? Se enviará «arranca LAN-2669». Para añadirle algo, escríbelo.'])
+  expect(lista).toEqual([{ text: 'arranca LAN-2669', asUser: true }])
+  await ui.unmount()
+})
+
+test(
+  'el ▷ usa la frase de /config y le pega lo que escribas',
+  { options: { fraseArrancar: 'arranca {clave} según docs/FLUJO.md previa revisión del ticket' } },
+  async ($, on) => {
+    ficheros(on, ROOT, MD)
+    sinGit(on)
+    abre(on)
+    contesta(on, 'y ojo que staging cambió')
+    const lista = enviados(on)
+    await $.command.run({ command: 'mi-mesa', args: '' } as never)
+    const ui = await $.ui.mount({ plugin: 'mi-mesa', surface: 'terminal', component: 'Pane', requestId: 'mi-mesa', props: {} as never })
+    await ui.press({ key: 'arrancar-LAN-2669' })
+    expect(lista.map(p => p.text)).toEqual([
+      'arranca LAN-2669 según docs/FLUJO.md previa revisión del ticket y ojo que staging cambió',
+    ])
+    await ui.unmount()
+  },
+)
+
+test('el ▷ no envía nada con Dejarlo', async ($, on) => {
+  ficheros(on, ROOT, MD)
+  sinGit(on)
+  abre(on)
+  contesta(on, 'Dejarlo')
+  const lista = enviados(on)
+  await $.command.run({ command: 'mi-mesa', args: '' } as never)
+  const ui = await $.ui.mount({ plugin: 'mi-mesa', surface: 'terminal', component: 'Pane', requestId: 'mi-mesa', props: {} as never })
+  await ui.press({ key: 'arrancar-LAN-2669' })
+  expect(lista).toEqual([])
+  await ui.unmount()
+})
+
+test('el ▷ no envía nada con escape o sin nadie a quien preguntar', async ($, on) => {
+  ficheros(on, ROOT, MD)
+  sinGit(on)
+  abre(on)
+  contesta(on)
+  const lista = enviados(on)
+  await $.command.run({ command: 'mi-mesa', args: '' } as never)
+  const ui = await $.ui.mount({ plugin: 'mi-mesa', surface: 'terminal', component: 'Pane', requestId: 'mi-mesa', props: {} as never })
+  await ui.press({ key: 'arrancar-LAN-2669' })
+  expect(lista).toEqual([])
+  await ui.unmount()
+})
+
+
+/** Los tipos de los hijos directos de la caja con esa clave, en el árbol dibujado. */
+function hijosDe(arbol: unknown, clave: string): string[] | undefined {
+  const nodo = arbol as { type?: unknown; key?: unknown; children?: unknown; props?: { key?: unknown; children?: unknown } } | null
+  if (!nodo || typeof nodo !== 'object') return undefined
+  const hijos = ([] as unknown[]).concat(nodo.children ?? nodo.props?.children ?? []).flat(Infinity)
+  if (nodo.key === clave || nodo.props?.key === clave) {
+    return hijos.map(c => String((c as { type?: unknown } | null)?.type ?? typeof c))
+  }
+  for (const c of hijos) {
+    const r = hijosDe(c, clave)
+    if (r) return r
+  }
+  return undefined
+}
+
+test('la línea del ticket es una sola fila: marca, clave, resto y ▷ como hermanos', { options: { jiraUrl: 'https://acme.atlassian.net' } }, async ($, on) => {
+  ficheros(on, ROOT, MD)
+  sinGit(on)
+  abre(on)
+  await $.command.run({ command: 'mi-mesa', args: '' } as never)
+  const ui = await $.ui.mount({ plugin: 'mi-mesa', surface: 'terminal', component: 'Pane', requestId: 'mi-mesa', props: {} as never })
+  // Un Fragment en medio se dibujaba como columna y partía la línea en tres filas.
+  expect(hijosDe(await ui.drawn(), 'LAN-2669')).toEqual(['Text', 'Button', 'Text', 'Text', 'Button'])
   await ui.unmount()
 })
