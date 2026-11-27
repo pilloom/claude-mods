@@ -589,6 +589,47 @@ Lo que **no** hace, a propósito: la ventana de 14 días de actividad y los hilo
 «dormidos» del guion de backend. La mesa del mod lista todo lo abierto tuyo.
 Solo habla con **Jira Cloud** (API v3, `search/jql`).
 
+## Abrir y arrancar un ticket
+
+**La clave abre el ticket.** Con «Jira: URL» puesta en `/config` (basta la
+URL, no hace falta el resto del generador), cada clave de la mesa es un botón
+que abre `https://<instancia>.atlassian.net/browse/LAN-2754` en el navegador.
+Es un botón con `open` y no un hipervínculo OSC 8 porque ese solo se pulsa en
+los terminales que lo entienden, y Terminal.app no es uno de ellos con
+seguridad. Sin URL la clave queda como texto y nada más cambia.
+
+**El `▷` lo arranca.** Está pegado al borde derecho de cada ticket. Va apagado
+y se enciende al pasar por la fila, como la `×` de las notas. Al pulsarlo sale
+el mismo diálogo que la `↻`:
+
+```
+¿Arrancar LAN-2754? Se enviará «arranca LAN-2754». Para añadirle algo, escríbelo.
+  1. Arrancar
+  2. Dejarlo
+  3. (texto libre)
+```
+
+- **Arrancar** envía la frase tal cual.
+- **Lo que escribas** se pega al final de la frase, sin sustituirla:
+  `arranca LAN-2754 según docs/FLUJO.md previa revisión del ticket` + `y ojo
+  que staging cambió`.
+- **Dejarlo** o escape no envían nada.
+
+Se envía directamente, sin dejarla en el prompt para que pulses Enter, porque
+el diálogo ya confirma y la casilla libre ya sirve para retocarla. Llega como
+tuya (`asUser`): el modelo la lee como una orden tuya y no como un mensaje
+del mod. Si Claude está a media respuesta, el motor la pone en cola hasta que
+termine.
+
+**La frase** sale de «Frase para arrancar un ticket» en `/config`. `{clave}` es
+la clave del ticket y `{titulo}` su resumen. Vacío vale `arranca {clave}`,
+que sirve a cualquier equipo, tenga o no un fichero de flujo. Una frase sin
+`{clave}` lleva la clave al final, porque una orden que no dice qué ticket
+arrancar no arranca ninguno.
+
+La línea del ticket cede tres columnas para el `▷` y se rellena hasta él, así
+que el botón queda siempre en el mismo sitio y ninguna fila pasa de `ancho - 1`.
+
 ## El post-it
 
 **Las notas** salen de un `NOTAS.md` en la **raíz** del repositorio, no en
@@ -777,7 +818,7 @@ las dos se verían apagadas**: están en un solo sitio cada una, al final de
 
 ```bash
 claude plugin validate .            # manifiesto y módulo, como los lee el motor
-claude plugin test .                # 97 tests
+claude plugin test .                # 134 tests
 ```
 
 Para los tipos hace falta que el motor haya cargado el mod alguna vez desde su

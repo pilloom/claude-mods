@@ -985,3 +985,57 @@ export function lineaDeTicket(t: Ticket, width: number): string {
   const hueco = Math.max(10, ancho - anchoEnTerminal(prefijo) - anchoEnTerminal(dueno))
   return recortar(`${prefijo}${recortar(t.summary, hueco)}${dueno}`, ancho)
 }
+
+
+/**
+ * La frase de arranque si en `/config` no se puso ninguna: la que sirve a
+ * cualquier equipo, tenga o no un fichero de flujo de trabajo.
+ */
+export const FRASE_ARRANQUE = 'arranca {clave}'
+
+/**
+ * La frase que el `▷` de un ticket le envía a Claude, con lo que se haya
+ * escrito en el diálogo pegado al final.
+ *
+ * `{clave}` y `{titulo}` se sustituyen todas las veces que salgan. Una
+ * plantilla en blanco es no haber configurado nada, y vale la de por defecto.
+ * Una plantilla sin `{clave}` lleva la clave al final: una frase que no dice
+ * qué ticket arrancar no arranca ninguno.
+ */
+export function fraseDeArranque(
+  plantilla: string | undefined,
+  t: Pick<Ticket, 'key' | 'summary'>,
+  extra?: string,
+): string {
+  const base = plantilla?.trim() || FRASE_ARRANQUE
+  const conClave = base.includes('{clave}') ? base : `${base} {clave}`
+  const frase = conClave.replaceAll('{clave}', t.key).replaceAll('{titulo}', t.summary)
+  const mas = extra?.trim()
+  return mas ? `${frase} ${mas}` : frase
+}
+
+/**
+ * La dirección del ticket en Jira, con la URL de `/config`; `undefined`
+ * cuando no hay URL o no es `https://`, y entonces la clave no es enlace.
+ */
+export function urlDeTicket(base: string | undefined, key: string): string | undefined {
+  const b = (base ?? '').trim().replace(/\/+$/u, '')
+  if (!/^https:\/\/[^\s/]+/u.test(b) || !CLAVE.test(key)) return undefined
+  return `${b}/browse/${encodeURIComponent(key)}`
+}
+
+/**
+ * La línea de un ticket partida en tres para que la clave sea un botón:
+ * lo de antes (marca y tipo), la clave y lo de después, ya rellenado hasta
+ * `cols` columnas. Juntas son `lineaDeTicket(t, cols + 1)` con relleno.
+ *
+ * Si el recorte se comió la clave —un panel absurdamente estrecho— todo va
+ * en `despues` y no hay botón: un trozo de clave no abre nada que se sepa.
+ */
+export function trozosDeTicket(t: Ticket, cols: number): { antes: string; clave: string; despues: string } {
+  const linea = lineaDeTicket(t, cols + 1)
+  const relleno = ' '.repeat(Math.max(0, cols - anchoEnTerminal(linea)))
+  const antes = `${t.mark} ${t.tipo ? `${t.tipo} ` : ''}`
+  if (!linea.startsWith(antes + t.key)) return { antes: '', clave: '', despues: linea + relleno }
+  return { antes, clave: t.key, despues: linea.slice(antes.length + t.key.length) + relleno }
+}
